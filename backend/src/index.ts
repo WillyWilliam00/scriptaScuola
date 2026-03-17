@@ -9,6 +9,7 @@ import utentiRoutes from './route/utenti.js';
 import registrazioniCopieRoutes from './route/registrazioniCopie.js';
 import istitutiRoutes from './route/istituti.js';
 import helmet from 'helmet';
+import healthRoutes from './route/health.js';
 const app = express();
 // Porta del backend: default 3001 per evitare conflitto con frontend Vite su 3000
 const PORT = process.env.PORT || 3001;
@@ -25,7 +26,7 @@ app.use(
     helmet({
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: false, 
+        crossOriginResourcePolicy: false,
         referrerPolicy: {
             policy: 'strict-origin-when-cross-origin',
         },
@@ -39,15 +40,18 @@ app.use(
 
 app.use(cors({
     origin: (origin, callback) => {
-        if(!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
         const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-})) 
+}))
 app.use(express.json());
+
+// Rotte di health check
+app.use('/api/health', healthRoutes);
 
 // Rotte pubbliche (autenticazione)
 app.use('/api/auth', authenticationRoutes);
