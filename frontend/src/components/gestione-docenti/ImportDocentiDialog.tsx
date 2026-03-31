@@ -44,8 +44,8 @@ export function ImportDocentiDialog({ open, onOpenChange }: ImportDocentiDialogP
     setImportPreview(null);
 
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    if (![".xlsx", ".xls"].includes(ext)) {
-      setParsingError("Formato file non supportato. Usa un file .xlsx o .xls");
+    if (ext !== ".xlsx") {
+      setParsingError("Formato file non supportato. Usa un file .xlsx");
       return;
     }
 
@@ -149,7 +149,7 @@ export function ImportDocentiDialog({ open, onOpenChange }: ImportDocentiDialogP
               <Input
                 id="excel-file"
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 disabled={bulkImport.isPending}
