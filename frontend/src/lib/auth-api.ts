@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { useAuthStore } from '../store/auth-store.js';
-import type { LoginData, RegisterData, InsertIstituto } from '../../../shared/validation.js';
+import type { LoginData, RegisterData, InsertIstituto, ChangePassword } from '../../../shared/validation.js';
 import type { LoginResponse } from '../../../shared/types.js';
 import type { QueryClient } from '@tanstack/react-query';
 
@@ -103,5 +103,18 @@ export async function logout(queryClient?: QueryClient): Promise<{ message: stri
   }
   
   return { message: 'Logout effettuato con successo' };
+}
+
+/**
+ * Cambia la password dell'utente autenticato.
+ * Richiede la password attuale: il backend verifica hash e rifiuta se la nuova è uguale.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  const payload: ChangePassword = { currentPassword, newPassword };
+  const response = await api.post<{ message: string }>('/auth/change-password', payload);
+  return response.data;
 }
 

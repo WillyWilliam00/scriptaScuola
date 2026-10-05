@@ -6,7 +6,9 @@ import type { BulkImportDocenti } from "../../../shared/validation.js";
  * Accetta colonne con nomi flessibili (es. "limite", "copie effettuate").
  * @throws Error se il file è vuoto, formato non valido o validazione fallisce
  */
-export async function parseExcelFile(file: File): Promise<BulkImportDocenti["docenti"]> {
+export async function parseExcelFile(
+  file: File,
+): Promise<BulkImportDocenti["docenti"]> {
   try {
     const data = await file.arrayBuffer();
     if (!data) {
@@ -37,18 +39,20 @@ export async function parseExcelFile(file: File): Promise<BulkImportDocenti["doc
           const header = headers[colNumber];
           if (header) {
             let value = cell.value;
-            
+
             // Resolve formula and rich text
-            if (value && typeof value === 'object') {
-              if ('result' in value) {
+            if (value && typeof value === "object") {
+              if ("result" in value) {
                 value = (value as ExcelJS.CellFormulaValue).result;
-              } else if ('richText' in value) {
-                value = (value as ExcelJS.CellRichTextValue).richText.map((rt: any) => rt.text).join('');
-              } else if ('text' in value) {
+              } else if ("richText" in value) {
+                value = (value as ExcelJS.CellRichTextValue).richText
+                  .map((rt) => rt.text)
+                  .join("");
+              } else if ("text" in value) {
                 value = (value as ExcelJS.CellHyperlinkValue).text;
               }
             }
-            
+
             rowData[header] = value;
             if (value !== null && value !== undefined && value !== "") {
               hasValue = true;
@@ -66,7 +70,10 @@ export async function parseExcelFile(file: File): Promise<BulkImportDocenti["doc
       throw new Error("Il file Excel è vuoto");
     }
 
-    const getColumnValue = (row: Record<string, unknown>, candidates: string[]) => {
+    const getColumnValue = (
+      row: Record<string, unknown>,
+      candidates: string[],
+    ) => {
       for (const [key, value] of Object.entries(row)) {
         const normalized = key.toLowerCase().replace(/\s|_/g, "");
         if (candidates.includes(normalized)) return value;
@@ -78,11 +85,17 @@ export async function parseExcelFile(file: File): Promise<BulkImportDocenti["doc
       const nomeRaw = getColumnValue(row, ["nome"]);
       const cognomeRaw = getColumnValue(row, ["cognome"]);
       const limiteRaw = getColumnValue(row, ["limitecopie", "limite"]);
-      const copieRaw = getColumnValue(row, ["copieeffettuate", "copieeff", "copie"]);
+      const copieRaw = getColumnValue(row, [
+        "copieeffettuate",
+        "copieeff",
+        "copie",
+      ]);
       const noteRaw = getColumnValue(row, ["note"]);
 
       const nome =
-        typeof nomeRaw === "string" ? nomeRaw.trim() : String(nomeRaw ?? "").trim();
+        typeof nomeRaw === "string"
+          ? nomeRaw.trim()
+          : String(nomeRaw ?? "").trim();
       const cognome =
         typeof cognomeRaw === "string"
           ? cognomeRaw.trim()
@@ -90,22 +103,28 @@ export async function parseExcelFile(file: File): Promise<BulkImportDocenti["doc
       const limiteCopie = Number(limiteRaw ?? 0);
       const copieEffettuate = Number(copieRaw ?? 0);
       const note =
-        typeof noteRaw === "string" ? noteRaw : noteRaw != null ? String(noteRaw) : "";
+        typeof noteRaw === "string"
+          ? noteRaw
+          : noteRaw != null
+            ? String(noteRaw)
+            : "";
 
       if (!nome || !cognome) {
         throw new Error(`Riga ${index + 2}: nome e cognome sono obbligatori`);
       }
       if (isNaN(limiteCopie) || limiteCopie < 0) {
-        throw new Error(`Riga ${index + 2}: limiteCopie deve essere un numero >= 0`);
+        throw new Error(
+          `Riga ${index + 2}: limiteCopie deve essere un numero >= 0`,
+        );
       }
       if (isNaN(copieEffettuate) || copieEffettuate < 0) {
         throw new Error(
-          `Riga ${index + 2}: copieEffettuate deve essere un numero >= 0`
+          `Riga ${index + 2}: copieEffettuate deve essere un numero >= 0`,
         );
       }
       if (copieEffettuate > limiteCopie) {
         throw new Error(
-          `Riga ${index + 2}: copieEffettuate (${copieEffettuate}) supera limiteCopie (${limiteCopie})`
+          `Riga ${index + 2}: copieEffettuate (${copieEffettuate}) supera limiteCopie (${limiteCopie})`,
         );
       }
 

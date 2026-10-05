@@ -5,6 +5,7 @@ import { cleanTestDb, testDb } from '../db/test-setup.js';
 import { seedTestData, testCredentials } from '../db/test-seed.js';
 import { refreshTokens } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { loginAsAdmin, loginAsCollaboratore } from '../utils/test-helpers.js';
 
 describe('POST /api/auth/login', () => {
   beforeAll(async () => {
@@ -355,6 +356,113 @@ describe('POST /api/auth/refresh', () => {
       });
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/auth/change-password', () => {
+  beforeAll(async () => {
+    await cleanTestDb();
+    await seedTestData();
+  });
+
+  afterAll(async () => {
+    await cleanTestDb();
+  });
+
+  it('restituisce 401 senza token', async () => {
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .send({
+        currentPassword: 'password123',
+        newPassword: 'nuovaPassword1',
+      });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('restituisce 400 con password attuale sbagliata', async () => {
+    const { token } = await loginAsAdmin();
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        currentPassword: 'password_sbagliata',
+        newPassword: 'nuovaPassword1',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Password attuale non corretta');
+  });
+
+  it('restituisce 400 se la nuova password coincide con quella attuale', async () => {
+    const { token } = await loginAsAdmin();
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        currentPassword: testCredentials.admin.password,
+        newPassword: testCredentials.admin.password,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('La nuova password deve essere diversa da quella attuale');
+  });
+
+  it('aggiorna la password admin e permette il login con la nuova', async () => {
+    const { token } = await loginAsAdmin();
+    const nuovaPassword = 'nuovaPasswordAdmin';
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        currentPassword: testCredentials.admin.password,
+        newPassword: nuovaPassword,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Password aggiornata con successo');
+
+    const loginVecchia = await request(app)
+      .post('/api/auth/login')
+      .send({
+        identifier: testCredentials.admin.email,
+        password: testCredentials.admin.password,
+      });
+    expect(loginVecchia.status).toBe(401);
+
+    const loginNuova = await request(app)
+      .post('/api/auth/login')
+      .send({
+        identifier: testCredentials.admin.email,
+        password: nuovaPassword,
+      });
+    expect(loginNuova.status).toBe(200);
+  });
+
+  it('aggiorna la password collaboratore e permette il login con la nuova', async () => {
+    const { token } = await loginAsCollaboratore();
+    const nuovaPassword = 'nuovaPasswordCollab';
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        currentPassword: testCredentials.collaboratore.password,
+        newPassword: nuovaPassword,
+      });
+
+    expect(res.status).toBe(200);
+
+    const loginNuova = await request(app)
+      .post('/api/auth/login')
+      .send({
+        identifier: testCredentials.collaboratore.username,
+        password: nuovaPassword,
+      });
+    expect(loginNuova.status).toBe(200);
   });
 });
 

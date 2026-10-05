@@ -6,69 +6,94 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectI
 import type { Utente } from "@shared/types";
 import { formatError, utenteDisplayName } from "@/lib/utils";
 import { useUpdateUtente } from "@/hooks/use-utenti";
-import type { ModifyUtente } from "@shared/validation";
+import { modifyUtenteFormSchema, type ModifyUtente, type ModifyUtenteForm } from "@shared/validation";
 import { useForm } from "@tanstack/react-form";
-import { modifyUtenteSchema } from "@shared/validation";
+import { useEffect } from "react";
 
 interface EditUtenteModalProps {
     selectedUtente: Utente | null;
     typeForm: "edit" | "view" | "delete" | "add" | null;
     onClose: () => void;
 }
+
+const emptyFormValues: ModifyUtenteForm = {
+    ruolo: "collaboratore",
+    email: "",
+    username: "",
+    password: "",
+};
+
+function getDefaultValues(utente: Utente): ModifyUtenteForm {
+    if (utente.ruolo === "admin") {
+        return {
+            ruolo: "admin",
+            email: utente.email,
+            username: "",
+            password: "",
+        };
+    }
+    return {
+        ruolo: "collaboratore",
+        email: "",
+        username: utente.username,
+        password: "",
+    };
+}
+
+function toModifyUtente(value: ModifyUtenteForm): ModifyUtente {
+    if (value.ruolo === "admin") {
+        return {
+            ruolo: "admin",
+            email: value.email,
+            password: value.password,
+        };
+    }
+    return {
+        ruolo: "collaboratore",
+        username: value.username,
+        password: value.password,
+    };
+}
+
 export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: EditUtenteModalProps) {
     const isAdmin = selectedUtente ? selectedUtente.ruolo === "admin" : false;
-
+    const isOpen = typeForm === "edit" && selectedUtente !== null;
 
     const updateUtente = useUpdateUtente();
 
-    const getDefaultValue = (utente: Utente) => {
-        if (utente.ruolo === "admin") {
-            return {
-                ruolo: utente.ruolo,
-                email: utente.email,
-                username: '',
-                password: '',
-            } as ModifyUtente;
-        }
-        return {
-            ruolo: utente.ruolo,
-            username: utente.username,
-            email: '',
-            password: '',
-        } as ModifyUtente;
-    }
-
-    const defaultValue: ModifyUtente = selectedUtente
-        ? getDefaultValue(selectedUtente)
-        : { ruolo: "collaboratore", username: "", password: "" };
-
     const form = useForm({
-        defaultValues: defaultValue,
+        defaultValues: emptyFormValues,
         validators: {
-            onChange: modifyUtenteSchema,
-            onMount: modifyUtenteSchema,
+            onChange: modifyUtenteFormSchema,
+            onMount: modifyUtenteFormSchema,
         },
         onSubmit: async ({ value }) => {
-            if(!selectedUtente || !value) return;
-            updateUtente.mutate({ id: selectedUtente.id, data: value }, {
+            if (!selectedUtente || !value) return;
+            updateUtente.mutate({ id: selectedUtente.id, data: toModifyUtente(value) }, {
                 onSuccess: () => {
                     onClose();
                     updateUtente.reset();
-                    form.reset();
+                    form.reset(emptyFormValues);
                 }
             })
         }
     })
 
+    useEffect(() => {
+        if (isOpen && selectedUtente) {
+            form.reset(getDefaultValues(selectedUtente));
+        }
+    }, [isOpen, selectedUtente, form]);
+
     return (
         <Dialog
-            open={typeForm === "edit" && selectedUtente !== null}
+            open={isOpen}
             onOpenChange={(open) => {
                 if (!open) {
                     updateUtente.reset();
-                    form.reset();
+                    form.reset(emptyFormValues);
                     onClose();
-                } 
+                }
             }}
         >
             <DialogContent>
@@ -92,13 +117,7 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
                                 disabled={isAdmin}
                                 value={field.state.value}
                                 onValueChange={(value) => {
-                                    const nuovoRuolo = value as ModifyUtente['ruolo'];
-                                    field.handleChange(nuovoRuolo);
-                                    if(nuovoRuolo === 'admin') {
-                                        form.setFieldValue('username', '', );
-                                    } else {
-                                        form.setFieldValue('email', '');
-                                    }
+                                    field.handleChange(value as ModifyUtenteForm['ruolo']);
                                 }}
                             >
                                 <SelectTrigger>
@@ -129,7 +148,7 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
                                                         value={field.state.value}
                                                         onChange={(e) =>
                                                             field.handleChange(e.target.value)}
-                                                            
+
 
                                                     />
                                                 </FieldContent>
@@ -188,7 +207,7 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
                                             placeholder="Minimo 8 caratteri"
                                             value={field.state.value}
                                             onChange={(e) =>
-                                                field.handleChange(e.target.value)}
+                                                field.handleChange(e.target.value ?? "")}
                                         />
                                     </FieldContent>
                                 </Field>

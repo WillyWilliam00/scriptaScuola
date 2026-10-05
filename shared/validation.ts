@@ -61,6 +61,71 @@ export const modifyUtenteSchema = z.discriminatedUnion('ruolo', [
   })
 ]);
 
+const passwordMin8 = z.string().min(8, 'La password deve essere di almeno 8 caratteri');
+
+/**
+ * Schema del form di modifica utente: email e username restano entrambi nel state.
+ * Si valida solo il campo del ruolo attivo, così un campo vuoto dell'altro ruolo
+ * non tiene canSubmit a false.
+ */
+export const modifyUtenteFormSchema = z.object({
+  ruolo: z.enum(['admin', 'collaboratore']),
+  email: z.string(),
+  username: z.string(),
+  password: passwordMin8.or(z.literal('')).optional(),
+}).superRefine((data, ctx) => {
+  if (data.ruolo === 'admin') {
+    const emailResult = z.email('Formato email non valido').safeParse(data.email);
+    if (!emailResult.success) {
+      ctx.addIssue({
+        code: 'custom',
+        message: emailResult.error.issues[0]?.message ?? 'Formato email non valido',
+        path: ['email'],
+      });
+    }
+    return;
+  }
+
+  if (data.username.length < 3) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Il username deve essere lungo almeno 3 caratteri',
+      path: ['username'],
+    });
+  }
+  if (data.username.includes('@')) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Il username non può contenere @',
+      path: ['username'],
+    });
+  }
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: passwordMin8,
+  newPassword: passwordMin8,
+});
+
+export const changePasswordFormSchema = changePasswordSchema.extend({
+  confirmPassword: passwordMin8,
+}).superRefine((data, ctx) => {
+  if (data.newPassword === data.currentPassword) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'La nuova password deve essere diversa da quella attuale',
+      path: ['newPassword'],
+    });
+  }
+  if (data.newPassword !== data.confirmPassword) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Le password non coincidono',
+      path: ['confirmPassword'],
+    });
+  }
+});
+
 // --- Login (un campo identificativo: email o username) ---
 export const loginSchema = z.object({
   identifier: z.string()
@@ -263,6 +328,9 @@ export type InsertDocente = z.infer<typeof insertDocenteSchema>;
 export type RegisterData = z.infer<typeof registerSchema>;
 export type CreateUtente = z.infer<typeof createUtenteSchema>;
 export type ModifyUtente = z.infer<typeof modifyUtenteSchema>
+export type ModifyUtenteForm = z.infer<typeof modifyUtenteFormSchema>;
+export type ChangePassword = z.infer<typeof changePasswordSchema>;
+export type ChangePasswordForm = z.infer<typeof changePasswordFormSchema>;
 export type ModifyDocente = z.infer<typeof modifyDocenteSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type InsertRegistrazione = z.infer<typeof insertRegistrazioneSchema>;

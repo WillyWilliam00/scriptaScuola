@@ -1,7 +1,7 @@
 import express from 'express';
 import { asyncHandler, type ErrorWithStatus } from '../middleware/auth.js';
 import type { Request, Response } from 'express';
-import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente, type RefreshToken, refreshTokenSchema } from '../../../shared/validation.js';
+import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, changePasswordSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente, type RefreshToken, refreshTokenSchema } from '../../../shared/validation.js';
 import { istituti, refreshTokens, utenti } from '../db/schema.js';
 import { db } from '../db/index.js';
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
@@ -188,5 +188,44 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
     res.status(200).json(response)
 }))
 
+const changePasswordRouter = express.Router();
 
-    export default router;
+changePasswordRouter.post('/change-password', asyncHandler(async (req: Request, res: Response) => {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+    const [utente] = await db.select().from(utenti).where(eq(utenti.id, req.user.userId));
+    if (!utente) {
+        const error = new Error('Utente non trovato') as ErrorWithStatus;
+        error.status = 404;
+        throw error;
+    }
+
+    const passwordAttualeValida = await bcrypt.compare(currentPassword, utente.passwordHash);
+    if (!passwordAttualeValida) {
+        const error = new Error('Password attuale non corretta') as ErrorWithStatus;
+        error.status = 400;
+        throw error;
+    }
+
+    const stessaPassword = await bcrypt.compare(newPassword, utente.passwordHash);
+    if (stessaPassword) {
+        const error = new Error('La nuova password deve essere diversa da quella attuale') as ErrorWithStatus;
+        error.status = 400;
+        throw error;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.update(utenti)
+        .set({
+            passwordHash,
+            updatedAt: new Date(),
+        })
+        .where(eq(utenti.id, utente.id));
+
+    res.status(200).json({
+        message: 'Password aggiornata con successo',
+    });
+}));
+
+export { changePasswordRouter };
+export default router;

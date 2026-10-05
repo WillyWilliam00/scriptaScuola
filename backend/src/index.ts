@@ -3,7 +3,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import { authMiddleware, requireRole, errorHandler } from './middleware/auth.js';
 import { tenantStoreMiddleware } from './middleware/tenantStore.js';
-import authenticationRoutes from './route/authentication.js';
+import authenticationRoutes, { changePasswordRouter } from './route/authentication.js';
 import docentiRoutes from './route/docenti.js';
 import utentiRoutes from './route/utenti.js';
 import registrazioniCopieRoutes from './route/registrazioniCopie.js';
@@ -55,6 +55,9 @@ app.use('/api/health', healthRoutes);
 
 // Rotte pubbliche (autenticazione)
 app.use('/api/auth', authenticationRoutes);
+
+// Cambio password: autenticato, disponibile a tutti i ruoli
+app.use('/api/auth', authMiddleware, changePasswordRouter);
 
 // Rotte protette - richiedono autenticazione e tenantStore
 // Docenti: accessibili a admin e collaboratori

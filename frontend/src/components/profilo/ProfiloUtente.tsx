@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { logout } from '@/lib/auth-api';
 import { useNavigate } from 'react-router-dom';
 import { useDeleteUtente } from '@/hooks/use-utenti';
+import CambiaPasswordCard from '@/components/profilo/CambiaPasswordCard';
 
 type DeleteDialogType = 'account' | 'istituto' | null;
 
@@ -138,6 +139,9 @@ export default function ProfiloUtente() {
         </CardContent>
 
       </Card>
+
+      <CambiaPasswordCard />
+
       {isAdmin && (
         <>
         <div className="container mx-auto p-6 max-w-2xl bg-red-500/10 mt-6 rounded-lg">
