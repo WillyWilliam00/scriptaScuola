@@ -16,7 +16,6 @@ const GestioneDocenti = lazy(() => import("./components/gestione-docenti/Gestion
 const GestioneUtenze = lazy(() => import("./components/gestione-utenze/GestioneUtenze"));
 const VisualizzaRegistrazioni = lazy(() => import("./components/visualizza-registrazioni/VisualizzaRegistrazioni"));
 const ProfiloUtente = lazy(() => import("./components/profilo/ProfiloUtente"));
-const Feedback = lazy(() => import("./components/feedback/Feedback"));
 const NotFound = lazy(() => import("./components/common/NotFound"));
 
 export function App() {
@@ -107,14 +106,6 @@ export function App() {
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <VisualizzaRegistrazioni />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/feedback"
-                element={
-                  <ProtectedRoute requiredRole="admin">
-                    <Feedback />
                   </ProtectedRoute>
                 }
               />
