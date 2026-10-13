@@ -42,9 +42,10 @@ export function useUtenteForm({ passwordRequired, onSubmit }: UseUtenteFormOptio
 
     return useForm({
         defaultValues: emptyUtenteFormValues,
+        // Niente onMount: un errore calcolato al mount (ruolo collaboratore vuoto)
+        // resterebbe in canSubmit anche dopo lo switch ad admin.
         validators: {
             onChange: schema,
-            onMount: schema,
         },
         onSubmit: async ({ value }) => {
             onSubmit(toUtentePayload(value));
