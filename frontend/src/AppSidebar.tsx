@@ -34,7 +34,6 @@ export function AppSidebar() {
     { title: "Gestione Docenti", url: "/gestione-docenti", icon: FileIcon, isProtected: true },
     { title: "Gestione Utenze", url: "/gestione-utenze", icon: KeyIcon, isProtected: true },
     { title: "Visualizza Registrazioni", url: "/visualizza-registrazioni", icon: FileIcon, isProtected: true },
-    { title: "Feedback", url: "/feedback", icon: FileIcon, isProtected: true },
   ]
   const handleLogout = async () => {
     // La funzione logout gestisce già tutto: chiamata API, pulizia store e cache

@@ -64,16 +64,18 @@ export const modifyUtenteSchema = z.discriminatedUnion('ruolo', [
 const passwordMin8 = z.string().min(8, 'La password deve essere di almeno 8 caratteri');
 
 /**
- * Schema del form di modifica utente: email e username restano entrambi nel state.
+ * Base dei form utente (creazione e modifica): email e username restano entrambi nel state.
  * Si valida solo il campo del ruolo attivo, così un campo vuoto dell'altro ruolo
  * non tiene canSubmit a false.
  */
-export const modifyUtenteFormSchema = z.object({
+const utenteFormBaseSchema = z.object({
   ruolo: z.enum(['admin', 'collaboratore']),
   email: z.string(),
   username: z.string(),
-  password: passwordMin8.or(z.literal('')).optional(),
-}).superRefine((data, ctx) => {
+  password: z.string(),
+});
+
+const refineUtenteFormRuolo = (data: z.infer<typeof utenteFormBaseSchema>, ctx: z.RefinementCtx) => {
   if (data.ruolo === 'admin') {
     const emailResult = z.email('Formato email non valido').safeParse(data.email);
     if (!emailResult.success) {
@@ -100,7 +102,17 @@ export const modifyUtenteFormSchema = z.object({
       path: ['username'],
     });
   }
-});
+};
+
+/** Form di creazione utente: la password è obbligatoria. */
+export const createUtenteFormSchema = utenteFormBaseSchema
+  .extend({ password: passwordMin8 })
+  .superRefine(refineUtenteFormRuolo);
+
+/** Form di modifica utente: la password è opzionale (vuota = invariata). */
+export const modifyUtenteFormSchema = utenteFormBaseSchema
+  .extend({ password: passwordMin8.or(z.literal('')) })
+  .superRefine(refineUtenteFormRuolo);
 
 export const changePasswordSchema = z.object({
   currentPassword: passwordMin8,
