@@ -1,0 +1,23 @@
+# ScriptaScuola
+
+> ScriptaScuola è il gestionale web gratuito per scuole e istituti scolastici che digitalizza la gestione delle fotocopie: limiti di copie per docente, tracciamento in tempo reale e dashboard centralizzata per l'amministrazione.
+
+ScriptaScuola sostituisce il registro cartaceo delle fotocopie. Ogni istituto si registra e gestisce i propri dati in modo separato (multi-tenant). Le funzionalità principali sono:
+
+- gestione dei limiti di copie assegnati a ciascun docente;
+- registrazione delle copie effettuate, con storico per utente;
+- gestione di utenti e ruoli (amministratore, collaboratore);
+- dashboard centralizzata e report per la segreteria.
+
+Il servizio è in lingua italiana ed è pensato per le scuole italiane. Le aree operative sono riservate agli utenti autenticati dell'istituto.
+
+## Pagine principali
+
+- [Home](https://scriptascuola.it/): presentazione del servizio e delle funzionalità
+- [Registra il tuo istituto](https://scriptascuola.it/register): creazione dell'account per una nuova scuola
+- [Accedi](https://scriptascuola.it/login): accesso all'area riservata per amministratori e collaboratori
+
+## Optional
+
+- [Sitemap](https://scriptascuola.it/sitemap.xml): elenco delle pagine pubbliche
+- [Autore](https://williamcosta.dev): William Costa, sviluppatore di ScriptaScuola
