@@ -1,0 +1,18 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "ScriptaScuola",
+    "identifier": "scriptascuola.it",
+    "documentationUrl": "https://scriptascuola.it/llms.txt",
+    "logoUrl": "https://scriptascuola.it/logo.png"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:scriptascuola.it:docs:llms-txt",
+      "displayName": "ScriptaScuola — guida per LLM",
+      "description": "Descrizione del servizio ScriptaScuola e delle sue pagine pubbliche, in formato llms.txt.",
+      "type": "text/markdown",
+      "url": "https://scriptascuola.it/llms.txt"
+    }
+  ]
+}
