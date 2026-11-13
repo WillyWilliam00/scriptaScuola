@@ -62,11 +62,19 @@ Segnala un problema solo se sai indicare **lo scenario concreto in cui si rompe*
 - Test rimossi, saltati (`skip`, `only`) o con asserzioni indebolite.
 - I test di integrazione condividono un database: un test nuovo pulisce e semina i dati come gli altri.
 
-### 9. Frontend
-- Dopo una mutazione le query giuste di TanStack Query vengono invalidate.
+### 9. Frontend e regole di React
+- Dopo una mutazione le query giuste di TanStack Query vengono invalidate; le chiavi delle query includono tutti i filtri e la pagina.
 - L'interceptor di refresh in `lib/api.ts` non entra in ciclo e non perde le richieste in coda.
 - `ProtectedRoute` e `PublicRoute` continuano a proteggere le pagine; l'interfaccia non mostra a un collaboratore azioni da admin.
 - La validazione dei form usa gli schemi di `shared`.
+- Regole degli hook: niente hook dentro condizioni, cicli o dopo un `return`; dipendenze di `useEffect`, `useMemo` e `useCallback` complete, senza disattivare la regola con un commento.
+- `useEffect` usato solo per sincronizzarsi con l'esterno: non per calcolare dati derivati dallo stato o dalle props, non per copiare i dati di una query in uno stato locale, non per reagire a un evento che si può gestire nel suo handler.
+- Effetti con timer, listener o richieste hanno la funzione di pulizia.
+- Stato non mutato direttamente; nessuno stato duplicato che può andare fuori sincronia (per esempio una lista filtrata salvata nello stato).
+- Liste con `key` stabile (l'id del dato, non l'indice) quando gli elementi si possono aggiungere, togliere o riordinare.
+- Niente `dangerouslySetInnerHTML`, `eval`, `innerHTML`; niente token o dati sensibili in `localStorage` oltre a quanto previsto da #41.
+- Niente `as any` o `@ts-ignore` nuovi per far tacere un errore di tipo: segnala cosa nascondono.
+- Bottoni con solo un'icona hanno `aria-label`; la navigazione usa `Link` e non `onClick` con `navigate()` quando è un semplice collegamento.
 
 ## Cosa ignorare
 - Stile, formattazione, nomi, ordine degli import.
