@@ -83,7 +83,7 @@ export default function GestioneUtenze() {
 
   const handleExport = useCallback(() => {
     exportUtenti(utentiQuery)
-  }, [utentiQuery])
+  }, [exportUtenti, utentiQuery])
 
   const filterValues = useMemo(
     () => ({ identifier: utentiQuery.identifier }),

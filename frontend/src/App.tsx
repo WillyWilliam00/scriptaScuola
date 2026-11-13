@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -20,6 +20,14 @@ const VisualizzaRegistrazioni = lazy(() => import("./components/visualizza-regis
 const ProfiloUtente = lazy(() => import("./components/profilo/ProfiloUtente"));
 const NotFound = lazy(() => import("./components/common/NotFound"));
 
+function PageFallback() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
 export function App() {
   const isInitializing = useAuthStore((state) => state.isInitializing);
 
@@ -30,19 +38,19 @@ export function App() {
   }, []);
 
   // QueryClient creato una sola volta per l'intera vita del componente
-  const queryClientRef = useRef<QueryClient | null>(null);
-  if (!queryClientRef.current) {
-    queryClientRef.current = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: 1,
-          refetchOnWindowFocus: false,
-          staleTime: 2 * 60 * 1000,
-          gcTime: 5 * 60 * 1000,
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: 1,
+            refetchOnWindowFocus: false,
+            staleTime: 2 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
+          },
         },
-      },
-    });
-  }
+      }),
+  );
 
   if (isInitializing) {
     return (
@@ -52,15 +60,9 @@ export function App() {
     );
   }
 
-  const PageFallback = () => (
-    <div className="min-h-[50vh] flex items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-    </div>
-  );
-
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClientRef.current}>
+      <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Suspense fallback={<PageFallback />}>
             <Routes>
