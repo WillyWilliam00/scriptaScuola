@@ -77,6 +77,13 @@ Segnala un problema solo se sai indicare **lo scenario concreto in cui si rompe*
 - Il lint del frontend (con le regole di React e di TanStack Query) gira già nel workflow `lint-frontend.yml` sui file cambiati: controlla comunque questi punti, ma segnala soprattutto i commenti `eslint-disable` nuovi e i casi che il lint non può vedere.
 - Bottoni con solo un'icona hanno `aria-label`; la navigazione usa `Link` e non `onClick` con `navigate()` quando è un semplice collegamento.
 
+### 10. Aderenza all'issue
+Le issue del progetto descrivono cosa fare e quando il lavoro è finito («Cosa fare», «Fatto quando»). Se la PR ne cita una:
+- **Manca**: una richiesta dell'issue non è fatta o è fatta a metà. Cita la riga dell'issue.
+- **Diverso**: è fatta in un modo diverso da quello deciso nell'issue (per esempio una libreria o un flusso scartati).
+- **In più**: la PR cambia cose che l'issue non chiede. Segnalalo solo se il cambiamento è rischioso o dovrebbe stare in una PR separata.
+Se la PR non cita nessuna issue, salta questa sezione senza segnalarlo.
+
 ## Cosa ignorare
 - Stile, formattazione, nomi, ordine degli import.
 - I componenti generati in `frontend/src/components/ui/`.
