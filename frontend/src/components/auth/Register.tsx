@@ -10,6 +10,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { register } from "@/lib/auth-api.js";
 import { formatError } from "@/lib/utils";
 import { useState } from "react";
+import { ZodError } from "zod";
 
 /**
  * Componente Register con validazione Zod e gestione errori
@@ -58,13 +59,13 @@ export default function Register() {
             identifier: validatedUtente.email,
           },
         });
-      } catch (err: any) {
+      } catch (err) {
         // Gestione errori Zod o API
-        if (err.errors) {
-          // Errore di validazione Zod
-          const firstError = err.errors[0];
-          const fieldPath = firstError.path.join('.');
-          setError(`${fieldPath}: ${firstError.message}`);
+        if (err instanceof ZodError) {
+          // Errore di validazione Zod (in Zod 4 gli errori stanno in `issues`)
+          const firstError = err.issues[0];
+          const fieldPath = firstError?.path.join('.') ?? '';
+          setError(`${fieldPath}: ${firstError?.message ?? 'Dati non validi'}`);
         } else {
           setError(formatError(err, "Errore durante la registrazione"));
         }

@@ -23,4 +23,12 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Componenti generati da shadcn/ui: esportano anche varianti e hook (es. buttonVariants)
+    // accanto ai componenti. Va bene così: la regola serve solo all'hot reload in sviluppo.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

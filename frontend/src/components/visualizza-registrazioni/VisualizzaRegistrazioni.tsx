@@ -91,7 +91,7 @@ export default function VisualizzaRegistrazioni() {
 
  const handleExport = useCallback(() => {
   exportRegistrazioni(registrazioniQuery)
- }, [registrazioniQuery])
+ }, [exportRegistrazioni, registrazioniQuery])
 
   const filterValues = useMemo(
     () => ({
