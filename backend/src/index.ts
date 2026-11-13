@@ -10,7 +10,10 @@ import registrazioniCopieRoutes from './route/registrazioniCopie.js';
 import istitutiRoutes from './route/istituti.js';
 import helmet from 'helmet';
 import healthRoutes from './route/health.js';
+import { getTrustProxy } from './middleware/rateLimit.js';
 const app = express();
+// Dietro il proxy di Render: necessario perché il rate limit veda l'IP reale del client
+app.set('trust proxy', getTrustProxy());
 // Porta del backend: default 3001 per evitare conflitto con frontend Vite su 3000
 const PORT = process.env.PORT || 3001;
 const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';

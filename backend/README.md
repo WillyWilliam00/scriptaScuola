@@ -208,6 +208,7 @@ Creare un file `.env` in `backend` (o configurare le variabili nel tuo ambiente)
 - `DATABASE_URL`: connection string PostgreSQL (Neon o altro).
 - `JWT_SECRET`: chiave segreta per firmare i JWT.
 - `PORT`: porta HTTP su cui esporre il backend (default 3000).
+- `TRUST_PROXY`: numero di proxy davanti al backend (default 1, adatto a Render). Serve al limite dei tentativi su login e registrazione per leggere l'IP reale del client.
 - Eventuali altre variabili richieste dal tuo setup DB.
 
 #### Installazione dipendenze

@@ -11,12 +11,16 @@ import { JWT_SECRET } from '../middleware/auth.js';
 import { createTenantStore } from '../db/tenantStore.js';
 import type { ChangePasswordResponse, LoginResponse, RefreshTokenResponse } from '../../../shared/types.js';
 import { isEmailIdentifier } from '../db/utils/auth.js';
+import { createAuthLimiter } from '../middleware/rateLimit.js';
 import { hashRefreshToken, issueRefreshToken, revokeAllRefreshTokens } from '../db/utils/refreshTokens.js';
 const router = express.Router();
 
+// Limite ai tentativi sulle rotte pubbliche (vedi middleware/rateLimit.ts)
+const authLimiter = createAuthLimiter();
+
 const ACCESS_TOKEN_EXPIRATION = '15m';
 
-router.post('/setup-scuola', asyncHandler(async (req: Request, res: Response) => {
+router.post('/setup-scuola', authLimiter, asyncHandler(async (req: Request, res: Response) => {
     //ricevo i dati dal body 
     const dataIstituto: InsertIstituto = insertIstitutoSchema.parse(req.body.istituto)
     const dataUtente : RegisterData = registerSchema.parse(req.body.utente)
@@ -63,7 +67,7 @@ router.post('/setup-scuola', asyncHandler(async (req: Request, res: Response) =>
     })
 }))
 
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { identifier, password }: LoginData = loginSchema.parse(req.body)
     const isEmail = isEmailIdentifier(identifier)
     const [utente] = await db.select().from(utenti)
