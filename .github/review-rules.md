@@ -74,6 +74,7 @@ Segnala un problema solo se sai indicare **lo scenario concreto in cui si rompe*
 - Liste con `key` stabile (l'id del dato, non l'indice) quando gli elementi si possono aggiungere, togliere o riordinare.
 - Niente `dangerouslySetInnerHTML`, `eval`, `innerHTML`; niente token o dati sensibili in `localStorage` oltre a quanto previsto da #41.
 - Niente `as any` o `@ts-ignore` nuovi per far tacere un errore di tipo: segnala cosa nascondono.
+- Il lint del frontend (con le regole di React e di TanStack Query) gira già nel workflow `lint-frontend.yml` sui file cambiati: controlla comunque questi punti, ma segnala soprattutto i commenti `eslint-disable` nuovi e i casi che il lint non può vedere.
 - Bottoni con solo un'icona hanno `aria-label`; la navigazione usa `Link` e non `onClick` con `navigate()` quando è un semplice collegamento.
 
 ## Cosa ignorare

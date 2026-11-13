@@ -1,0 +1,48 @@
+name: Lint frontend
+
+# Lancia ESLint (regole di React, degli hook e di TanStack Query) sui file del frontend
+# cambiati dalla PR. Il codice già presente ha ancora degli errori di lint: controllando
+# solo i file toccati, il codice nuovo resta pulito senza bloccare le PR per il debito vecchio.
+# Gira sui server di GitHub e non consuma l'abbonamento Claude.
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'frontend/**'
+      - 'shared/**'
+      - 'package-lock.json'
+
+concurrency:
+  group: lint-frontend-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: ESLint sui file cambiati
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD -- 'frontend/*.ts' 'frontend/*.tsx' 'frontend/*.js' | sed 's#^frontend/##')
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Nessun file del frontend da controllare."
+            exit 0
+          fi
+          printf 'File controllati:\n'; printf '  %s\n' "${files[@]}"
+          cd frontend
+          npx eslint --max-warnings=0 "${files[@]}"
