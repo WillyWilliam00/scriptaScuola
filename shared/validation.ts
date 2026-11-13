@@ -33,12 +33,13 @@ export const registerSchema = z.object({
 
 // La password non si sceglie in creazione: la genera la piattaforma (password temporanea,
 // da cambiare al primo accesso). Per reimpostarla c'è l'endpoint della password temporanea.
+// Strict: un campo non previsto (compresa una password) dà 400 invece di essere scartato (issue #35).
 export const createUtenteSchema = z.discriminatedUnion('ruolo', [
-  z.object({
+  z.strictObject({
     ruolo: z.literal('admin'),
     email: z.email('Formato email non valido'),
   }),
-  z.object({
+  z.strictObject({
     ruolo: z.literal('collaboratore'),
     username: z.string()
       .min(3, 'Il username deve essere lungo almeno 3 caratteri')

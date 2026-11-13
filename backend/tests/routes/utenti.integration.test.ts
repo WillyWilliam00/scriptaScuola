@@ -54,7 +54,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_integ_test',
-        password: 'password123',
       });
 
     expect(res.status).toBe(201);
@@ -73,7 +72,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_integ_test',
-        password: 'password123',
       });
     expect(res.status).toBe(403);
   });
@@ -88,7 +86,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_da_aggiornare',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -100,7 +97,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_aggiornato',
-        password: 'password123',
       });
 
     expect(res.status).toBe(200);
@@ -118,7 +114,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_to_admin',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -130,7 +125,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'newadmin@test.com',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(200);
@@ -150,7 +144,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_to_admin_invalid',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -162,7 +155,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         username: 'should_not_matter',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(400);
@@ -179,7 +171,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'tempadmin@test.com',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -191,7 +182,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'admin_to_collab',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(200);
@@ -211,7 +201,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'admin_no_username_change@test.com',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -223,7 +212,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         email: 'admin_no_username_change@test.com',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(400);
@@ -240,7 +228,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_da_eliminare',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -264,7 +251,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'existingadmin@test.com',
-        password: 'password123',
       });
     expect(adminRes.status).toBe(201);
 
@@ -275,7 +261,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_for_email_conflict',
-        password: 'password123',
       });
     expect(collabRes.status).toBe(201);
     const collabId = collabRes.body.data.id as string;
@@ -287,7 +272,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'existingadmin@test.com',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(400);
@@ -304,7 +288,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'existing_collab',
-        password: 'password123',
       });
     expect(collabRes.status).toBe(201);
 
@@ -315,7 +298,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'admin',
         email: 'admin_for_username_conflict@test.com',
-        password: 'password123',
       });
     expect(adminRes.status).toBe(201);
     const adminId = adminRes.body.data.id as string;
@@ -327,7 +309,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'existing_collab',
-        password: 'password123',
       });
 
     expect(updateRes.status).toBe(400);
@@ -345,7 +326,6 @@ describe('Rotte /api/utenti', () => {
       .send({
         ruolo: 'collaboratore',
         username: 'collab_da_eliminare',
-        password: 'password123',
       });
     expect(createRes.status).toBe(201);
     const userId = createRes.body.data.id as string;
@@ -409,7 +389,6 @@ describe('Rotte /api/utenti', () => {
         .send({
           ruolo: 'collaboratore',
           username: 'collab_istituto2',
-          password: 'password123',
         });
       expect(createRes.status).toBe(201);
       const userIdIstituto2 = createRes.body.data.id as string;
@@ -421,7 +400,6 @@ describe('Rotte /api/utenti', () => {
         .send({
           ruolo: 'collaboratore',
           username: 'collab_tentativo',
-          password: 'password123',
         });
 
       expect(res.status).toBe(404);
@@ -436,7 +414,6 @@ describe('Rotte /api/utenti', () => {
         .send({
           ruolo: 'collaboratore',
           username: 'collab_da_eliminare_istituto2',
-          password: 'password123',
         });
       expect(createRes.status).toBe(201);
       const userIdIstituto2 = createRes.body.data.id as string;

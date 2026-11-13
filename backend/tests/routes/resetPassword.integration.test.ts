@@ -246,16 +246,30 @@ describe('Reset password dei collaboratori', () => {
       const res = await request(app)
         .post('/api/utenti/new-utente')
         .set('Authorization', `Bearer ${token}`)
-        // Una password inviata dal client viene ignorata
-        .send({ ruolo: 'collaboratore', username: 'nuovo_collab', password: 'sceltaDalClient1' });
+        .send({ ruolo: 'collaboratore', username: 'nuovo_collab' });
       expect(res.status).toBe(201);
       expect(res.body.passwordTemporanea).toMatch(FORMATO_PASSWORD_TEMPORANEA);
       expect(res.body.data).not.toHaveProperty('passwordHash');
 
-      expect((await login('nuovo_collab', 'sceltaDalClient1')).status).toBe(401);
       const primoAccesso = await login('nuovo_collab', res.body.passwordTemporanea);
       expect(primoAccesso.status).toBe(200);
       expect(primoAccesso.body.utente.deveCambiarePassword).toBe(true);
+    });
+
+    it('una password inviata dal client viene rifiutata (400)', async () => {
+      const { token } = await loginAsAdmin();
+      const crea = await request(app)
+        .post('/api/utenti/new-utente')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ruolo: 'collaboratore', username: 'altro_collab', password: 'sceltaDalClient1' });
+      expect(crea.status).toBe(400);
+
+      const id = await idCollaboratore();
+      const modifica = await request(app)
+        .put(`/api/utenti/update-utente/${id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ruolo: 'collaboratore', username: testCredentials.collaboratore.username, campoExtra: 'x' });
+      expect(modifica.status).toBe(400);
     });
 
     it('la registrazione dell\'istituto usa la password scelta, senza obbligo di cambio', async () => {

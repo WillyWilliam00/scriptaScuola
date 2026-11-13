@@ -252,9 +252,9 @@ describe('createUtenteSchema', () => {
     expect(createUtenteSchema.parse(input)).toEqual(input);
   });
 
-  it('scarta la password: la genera la piattaforma', () => {
+  it('rifiuta la password: la genera la piattaforma', () => {
     const input = { ruolo: 'collaboratore', username: 'mariorossi', password: 'password123' };
-    expect(createUtenteSchema.parse(input)).toEqual({ ruolo: 'collaboratore', username: 'mariorossi' });
+    expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
   });
 
   it('rifiuta collaboratore con username che contiene @', () => {
@@ -284,9 +284,9 @@ describe('modifyUtenteSchema', () => {
     const input = { ruolo: 'collaboratore', username: 'mariorossi' };
     expect(modifyUtenteSchema.parse(input)).toEqual(input);
   })
-  it('scarta la password: si reimposta solo con la password temporanea', () => {
+  it('rifiuta la password: si reimposta solo con la password temporanea', () => {
     const input = { ruolo: 'admin', email: 'a@b.it', password: 'password123' };
-    expect(modifyUtenteSchema.parse(input)).toEqual({ ruolo: 'admin', email: 'a@b.it' });
+    expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
   it('rifiuta username troppo corto', () => {
     const input = { ruolo: 'collaboratore', username: 'm' };
@@ -300,7 +300,7 @@ describe('modifyUtenteSchema', () => {
     const input = { ruolo: 'admin', email: 'ab' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
-  // Falliscono già su develop: vedi issue #35 (lo schema non è strict)
+  // Issue #35
   it('rifiuta campi extra non permessi per admin (strict)', () => {
     const input = { ruolo: 'admin', email: 'a@b.it', campoExtra: 'x' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);

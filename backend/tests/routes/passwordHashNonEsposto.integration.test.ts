@@ -58,12 +58,12 @@ describe('L\'hash della password non esce mai dalle risposte', () => {
     const res = await request(app)
       .post('/api/utenti/new-utente')
       .set('Authorization', `Bearer ${token}`)
-      .send({ ruolo: 'collaboratore', username: 'nuovo_collab', password: 'password123' });
+      .send({ ruolo: 'collaboratore', username: 'nuovo_collab' });
     expect(res.status).toBe(201);
     expectNessunHash(res.body);
   });
 
-  it('modifica utente senza nuova password', async () => {
+  it('modifica utente', async () => {
     const res = await request(app)
       .put(`/api/utenti/update-utente/${collaboratoreId}`)
       .set('Authorization', `Bearer ${token}`)
@@ -77,11 +77,10 @@ describe('L\'hash della password non esce mai dalle risposte', () => {
     expectNessunHash(res.body);
   });
 
-  it('modifica utente con nuova password', async () => {
+  it('generazione della password temporanea', async () => {
     const res = await request(app)
-      .put(`/api/utenti/update-utente/${collaboratoreId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ ruolo: 'collaboratore', username: testCredentials.collaboratore.username, password: 'passwordNuova1' });
+      .post(`/api/utenti/${collaboratoreId}/password-temporanea`)
+      .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expectNessunHash(res.body);
   });
