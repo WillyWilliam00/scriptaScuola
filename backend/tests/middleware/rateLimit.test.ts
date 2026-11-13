@@ -63,18 +63,18 @@ describe('getTrustProxy', () => {
     else process.env.TRUST_PROXY = originale;
   });
 
-  it('usa 1 come valore predefinito', () => {
+  it('usa 2 come valore predefinito (Vercel + Render)', () => {
     delete process.env.TRUST_PROXY;
-    expect(getTrustProxy()).toBe(1);
+    expect(getTrustProxy()).toBe(2);
   });
 
   it('legge il numero di proxy da TRUST_PROXY', () => {
-    process.env.TRUST_PROXY = '2';
-    expect(getTrustProxy()).toBe(2);
+    process.env.TRUST_PROXY = '1';
+    expect(getTrustProxy()).toBe(1);
   });
 
   it('ignora valori non validi', () => {
     process.env.TRUST_PROXY = 'abc';
-    expect(getTrustProxy()).toBe(1);
+    expect(getTrustProxy()).toBe(2);
   });
 });

@@ -5,7 +5,7 @@ import { cleanTestDb, testDb } from '../db/test-setup.js';
 import { seedTestData, testCredentials } from '../db/test-seed.js';
 import { refreshTokens } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { loginAsAdmin, loginAsCollaboratore } from '../utils/test-helpers.js';
+import { getRefreshCookie, loginAsAdmin, loginAsCollaboratore, refreshCookieHeader } from '../utils/test-helpers.js';
 import { hashRefreshToken } from '../../src/db/utils/refreshTokens.js';
 
 describe('POST /api/auth/login', () => {
@@ -31,7 +31,9 @@ describe('POST /api/auth/login', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('token');
-    expect(res.body).toHaveProperty('refreshToken');
+    // Il refresh token viaggia solo nel cookie httpOnly, mai nel corpo
+    expect(res.body).not.toHaveProperty('refreshToken');
+    expect(getRefreshCookie(res)).toMatch(/^[a-f0-9]{64}$/);
     expect(res.body).toHaveProperty('utente');
     expect(res.body.utente.email).toBe(testCredentials.admin.email);
     expect(res.body.utente.ruolo).toBe('admin');
@@ -47,7 +49,9 @@ describe('POST /api/auth/login', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('token');
-    expect(res.body).toHaveProperty('refreshToken');
+    // Il refresh token viaggia solo nel cookie httpOnly, mai nel corpo
+    expect(res.body).not.toHaveProperty('refreshToken');
+    expect(getRefreshCookie(res)).toMatch(/^[a-f0-9]{64}$/);
     expect(res.body).toHaveProperty('utente');
     expect(res.body.utente.username).toBe(testCredentials.collaboratore.username);
     expect(res.body.utente.ruolo).toBe('collaboratore');
@@ -187,6 +191,84 @@ describe('POST /api/auth/setup-scuola', () => {
   });
 });
 
+const login = (identifier: string, password: string) =>
+  request(app).post('/api/auth/login').send({ identifier, password });
+const loginAdmin = () => login(testCredentials.admin.email, testCredentials.admin.password);
+const refresh = (token: string) =>
+  request(app).post('/api/auth/refresh').set('Cookie', refreshCookieHeader(token));
+const logout = (token: string) =>
+  request(app).post('/api/auth/logout').set('Cookie', refreshCookieHeader(token));
+
+describe('Cookie del refresh token', () => {
+  beforeAll(async () => {
+    await cleanTestDb();
+    await seedTestData();
+  });
+
+  afterAll(async () => {
+    await cleanTestDb();
+  });
+
+  it('il login imposta un cookie httpOnly, SameSite=Strict, limitato a /api/auth, della durata di 7 giorni', async () => {
+    const res = await loginAdmin();
+    const cookie = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/SameSite=Strict/i);
+    expect(cookie).toMatch(/Path=\/api\/auth/i);
+    expect(cookie).toMatch(/Max-Age=604800/i);
+  });
+
+  it('nei test il cookie non è Secure (supertest usa http)', async () => {
+    const res = await loginAdmin();
+    const cookie = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    expect(cookie).not.toMatch(/Secure/i);
+  });
+
+  it('fuori dai test il cookie è Secure', async () => {
+    const precedente = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const res = await loginAdmin();
+      const cookie = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+      expect(cookie).toMatch(/Secure/i);
+    } finally {
+      process.env.NODE_ENV = precedente;
+    }
+  });
+
+  it('un agente che conserva i cookie rinnova la sessione senza inviare nulla nel corpo', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({
+      identifier: testCredentials.admin.email,
+      password: testCredentials.admin.password,
+    });
+    expect(loginRes.status).toBe(200);
+
+    const res = await agent.post('/api/auth/refresh');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('token');
+  });
+
+  it('il refresh token inviato nel corpo, come prima, non viene più accettato', async () => {
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
+
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(res.status).toBe(401);
+  });
+
+  it('rifiuta con 403 una richiesta di refresh che arriva da un\'altra origine', async () => {
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
+
+    const res = await refresh(refreshToken).set('Origin', 'https://sito-malevolo.example');
+    expect(res.status).toBe(403);
+
+    // Il token non è stato consumato: dalla nostra origine funziona ancora
+    const ok = await refresh(refreshToken).set('Origin', 'http://localhost:3000');
+    expect(ok.status).toBe(200);
+  });
+});
+
 describe('POST /api/auth/logout', () => {
   beforeAll(async () => {
     await cleanTestDb();
@@ -197,81 +279,51 @@ describe('POST /api/auth/logout', () => {
     await cleanTestDb();
   });
 
-  it('revoca il refresh token con successo', async () => {
-    // Ottieni un refresh token fresco facendo login
-    const loginRes = await request(app)
-      .post('/api/auth/login')
-      .send({
-        identifier: testCredentials.admin.email,
-        password: testCredentials.admin.password,
-      });
-    
-    const refreshToken = loginRes.body.refreshToken;
+  it('revoca il refresh token e cancella il cookie', async () => {
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
 
     // Verifica che il token esista e non sia ancora revocato
     const [tokenBefore] = await testDb
       .select()
       .from(refreshTokens)
       .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
-    
+
     expect(tokenBefore).toBeDefined();
     expect(tokenBefore?.revokedAt).toBeNull(); // Non ancora revocato
 
-    // Fai logout
-    const res = await request(app)
-      .post('/api/auth/logout')
-      .send({
-        refreshToken,
-      });
+    const res = await logout(refreshToken);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('message');
     expect(res.body.message).toBe('Logout effettuato con successo');
+    // Il server chiede al browser di cancellare il cookie
+    expect(getRefreshCookie(res)).toBeNull();
+    expect(String(res.headers['set-cookie'])).toMatch(/refreshToken=;/);
 
     // Verifica che il token sia stato effettivamente revocato nel DB
     const [tokenAfter] = await testDb
       .select()
       .from(refreshTokens)
       .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
-    
-    expect(tokenAfter).toBeDefined();
-    expect(tokenAfter?.revokedAt).not.toBeNull(); // Ora è revocato!
+
     expect(tokenAfter?.revokedAt).toBeInstanceOf(Date);
-    
-    // Verifica che la data di revoca sia recente (impostata durante il test)
-    const revokedAtDate = tokenAfter!.revokedAt!;
-    const now = new Date();
-    const timeDiff = now.getTime() - revokedAtDate.getTime();
-    const secondsDiff = timeDiff / 1000;
-    
-    // La data deve essere stata impostata \"da poco\".
-    // Nota: teniamo una finestra più larga per evitare flakiness su macchine lente/CI.
+
+    // La data deve essere stata impostata "da poco" (finestra larga per macchine lente/CI)
+    const secondsDiff = (Date.now() - tokenAfter!.revokedAt!.getTime()) / 1000;
     expect(secondsDiff).toBeGreaterThanOrEqual(0);
     expect(secondsDiff).toBeLessThan(30);
   });
 
   it('restituisce 200 anche se il token non esiste (idempotente)', async () => {
-    // Prova a fare logout con un token inesistente MA valido per lo schema (64 char esadecimali).
-    // Se usi un token \"sporco\" (es. 'token_inesistente') lo schema lo blocca prima e ottieni 400.
-    const res = await request(app)
-      .post('/api/auth/logout')
-      .send({
-        refreshToken:
-          'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-      });
-
-    // La rotta non controlla se il token esiste, quindi restituisce sempre 200
+    const res = await logout('f'.repeat(64));
     expect(res.status).toBe(200);
   });
 
-  it('restituisce 400 con dati mancanti', async () => {
-    const res = await request(app)
-      .post('/api/auth/logout')
-      .send({
-        // refreshToken mancante
-      });
+  it('restituisce 200 anche senza cookie o con un cookie malformato', async () => {
+    const senzaCookie = await request(app).post('/api/auth/logout');
+    expect(senzaCookie.status).toBe(200);
 
-    expect(res.status).toBe(400);
+    const malformato = await logout('token_non_valido');
+    expect(malformato.status).toBe(200);
   });
 });
 
@@ -285,78 +337,50 @@ describe('POST /api/auth/refresh', () => {
     await cleanTestDb();
   });
 
-  it('genera nuovo access token e refresh token con successo', async () => {
-    // Ottieni un refresh token fresco facendo login
-    const loginRes = await request(app)
-      .post('/api/auth/login')
-      .send({
-        identifier: testCredentials.admin.email,
-        password: testCredentials.admin.password,
-      });
-    
-    const refreshToken = loginRes.body.refreshToken;
+  it('genera un nuovo access token e ruota il refresh token nel cookie', async () => {
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
 
-    // Usa il refresh token per ottenere nuovi token
-    const res = await request(app)
-      .post('/api/auth/refresh')
-      .send({
-        refreshToken,
-      });
+    const res = await refresh(refreshToken);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('token'); // Nuovo access token
-    expect(res.body).toHaveProperty('refreshToken'); // Nuovo refresh token
-    expect(res.body.refreshToken).not.toBe(refreshToken); // Deve essere diverso dal vecchio
+    expect(res.body).not.toHaveProperty('refreshToken');
+    const nuovo = getRefreshCookie(res);
+    expect(nuovo).toMatch(/^[a-f0-9]{64}$/);
+    expect(nuovo).not.toBe(refreshToken); // Deve essere diverso dal vecchio
+
+    // Il vecchio token è stato consumato dalla rotazione
+    const riuso = await refresh(refreshToken);
+    expect(riuso.status).toBe(401);
   });
 
-  it('restituisce 401 con refresh token non valido', async () => {
-    // Token valido per lo schema (64 char hex) ma NON presente nel DB -> la rotta arriva alla logica e risponde 401
-    const res = await request(app)
-      .post('/api/auth/refresh')
-      .send({
-        refreshToken:
-          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      });
+  it('restituisce 401 con refresh token non presente nel database', async () => {
+    const res = await refresh('a'.repeat(64));
 
     expect(res.status).toBe(401);
     expect(res.body).toHaveProperty('error');
   });
 
   it('restituisce 401 con refresh token già revocato', async () => {
-    // Ottieni un refresh token fresco
-    const loginRes = await request(app)
-      .post('/api/auth/login')
-      .send({
-        identifier: testCredentials.admin.email,
-        password: testCredentials.admin.password,
-      });
-    
-    const refreshToken = loginRes.body.refreshToken;
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
 
-    // Prima revoca il token con logout
-    await request(app)
-      .post('/api/auth/logout')
-      .send({ refreshToken });
+    await logout(refreshToken);
 
-    // Poi prova a usarlo per refresh
-    const res = await request(app)
-      .post('/api/auth/refresh')
-      .send({
-        refreshToken,
-      });
-
+    const res = await refresh(refreshToken);
     expect(res.status).toBe(401);
     expect(res.body).toHaveProperty('error');
   });
 
-  it('restituisce 400 con dati mancanti', async () => {
-    const res = await request(app)
-      .post('/api/auth/refresh')
-      .send({
-        // refreshToken mancante
-      });
+  it('restituisce 401 senza cookie', async () => {
+    const res = await request(app).post('/api/auth/refresh');
+    expect(res.status).toBe(401);
+  });
 
-    expect(res.status).toBe(400);
+  it('restituisce 401 con un cookie che non ha il formato di un refresh token', async () => {
+    for (const valore of ['a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64), 'a'.repeat(63) + 'g']) {
+      const res = await refresh(valore);
+      expect(res.status).toBe(401);
+    }
   });
 });
 
@@ -478,12 +502,8 @@ describe('Refresh token: hash nel database e revoca delle sessioni', () => {
     await cleanTestDb();
   });
 
-  const login = (identifier: string, password: string) =>
-    request(app).post('/api/auth/login').send({ identifier, password });
-
   it('non salva mai il refresh token in chiaro', async () => {
-    const loginRes = await login(testCredentials.admin.email, testCredentials.admin.password);
-    const refreshToken = loginRes.body.refreshToken as string;
+    const refreshToken = getRefreshCookie(await loginAdmin())!;
 
     const rows = await testDb.select().from(refreshTokens);
     expect(rows.length).toBeGreaterThan(0);
@@ -491,39 +511,42 @@ describe('Refresh token: hash nel database e revoca delle sessioni', () => {
     expect(rows.some((r) => r.tokenHash === hashRefreshToken(refreshToken))).toBe(true);
 
     // Anche dopo la rotazione il nuovo token è salvato solo come hash
-    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    const refreshRes = await refresh(refreshToken);
     expect(refreshRes.status).toBe(200);
+    const nuovo = getRefreshCookie(refreshRes)!;
     const rowsDopo = await testDb.select().from(refreshTokens);
-    expect(rowsDopo.some((r) => r.tokenHash === refreshRes.body.refreshToken)).toBe(false);
+    expect(rowsDopo.some((r) => r.tokenHash === nuovo)).toBe(false);
+    expect(rowsDopo.some((r) => r.tokenHash === hashRefreshToken(nuovo))).toBe(true);
   });
 
   it('un hash letto dal database non funziona come refresh token', async () => {
-    const loginRes = await login(testCredentials.admin.email, testCredentials.admin.password);
-    const hash = hashRefreshToken(loginRes.body.refreshToken);
+    const hash = hashRefreshToken(getRefreshCookie(await loginAdmin())!);
 
-    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: hash });
+    const res = await refresh(hash);
     expect(res.status).toBe(401);
   });
 
   it('dopo il cambio password i vecchi refresh token restituiscono 401 e quello nuovo funziona', async () => {
     // Due sessioni dello stesso utente (es. due dispositivi)
-    const sessioneA = await login(testCredentials.admin.email, testCredentials.admin.password);
-    const sessioneB = await login(testCredentials.admin.email, testCredentials.admin.password);
+    const sessioneA = await loginAdmin();
+    const sessioneB = await loginAdmin();
 
     const res = await request(app)
       .post('/api/auth/change-password')
       .set('Authorization', `Bearer ${sessioneA.body.token}`)
       .send({ currentPassword: testCredentials.admin.password, newPassword: 'nuovaPassword1' });
     expect(res.status).toBe(200);
-    expect(res.body.refreshToken).toMatch(/^[a-f0-9]{64}$/);
+    expect(res.body).not.toHaveProperty('refreshToken');
+    const nuovoToken = getRefreshCookie(res);
+    expect(nuovoToken).toMatch(/^[a-f0-9]{64}$/);
 
-    for (const vecchio of [sessioneA.body.refreshToken, sessioneB.body.refreshToken]) {
-      const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: vecchio });
+    for (const vecchia of [sessioneA, sessioneB]) {
+      const refreshRes = await refresh(getRefreshCookie(vecchia)!);
       expect(refreshRes.status).toBe(401);
     }
 
-    // La sessione di chi ha cambiato la password continua con il nuovo token
-    const nuovo = await request(app).post('/api/auth/refresh').send({ refreshToken: res.body.refreshToken });
+    // La sessione di chi ha cambiato la password continua con il nuovo cookie
+    const nuovo = await refresh(nuovoToken!);
     expect(nuovo.status).toBe(200);
   });
 
@@ -538,7 +561,7 @@ describe('Refresh token: hash nel database e revoca delle sessioni', () => {
       .send({ ruolo: 'collaboratore', username: testCredentials.collaboratore.username, password: 'passwordNuova1' });
     expect(res.status).toBe(200);
 
-    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: collab.body.refreshToken });
+    const refreshRes = await refresh(getRefreshCookie(collab)!);
     expect(refreshRes.status).toBe(401);
   });
 
@@ -552,7 +575,7 @@ describe('Refresh token: hash nel database e revoca delle sessioni', () => {
       .send({ ruolo: 'collaboratore', username: 'collaboratore_rinominato' });
     expect(res.status).toBe(200);
 
-    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: collab.body.refreshToken });
+    const refreshRes = await refresh(getRefreshCookie(collab)!);
     expect(refreshRes.status).toBe(200);
   });
 });

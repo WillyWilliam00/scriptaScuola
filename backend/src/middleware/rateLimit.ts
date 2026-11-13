@@ -22,11 +22,16 @@ export function createAuthLimiter(options: Partial<Options> = {}) {
 }
 
 /**
- * Numero di proxy fidati davanti al backend (Render = 1).
+ * Numero di proxy fidati davanti al backend.
  * Serve a Express per leggere l'IP reale del client da X-Forwarded-For:
- * senza, tutte le richieste sembrerebbero arrivare dallo stesso indirizzo.
+ * se il numero è troppo basso, tutti gli utenti sembrano arrivare dallo stesso indirizzo
+ * (quello del proxy) e condividono un unico limite di tentativi.
+ *
+ * Default 2: il browser chiama il sito su Vercel, che inoltra /api a Render (vercel.json),
+ * e Render ha a sua volta un proxy davanti al backend.
+ * Dopo un deploy si verifica con GET /api/health/ip: deve mostrare il proprio IP pubblico.
  */
 export function getTrustProxy(): number {
-  const value = Number(process.env.TRUST_PROXY ?? 1);
-  return Number.isInteger(value) && value >= 0 ? value : 1;
+  const value = Number(process.env.TRUST_PROXY ?? 2);
+  return Number.isInteger(value) && value >= 0 ? value : 2;
 }

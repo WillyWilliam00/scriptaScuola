@@ -432,27 +432,3 @@ describe('uuidParamSchema', () => {
     expect(() => uuidParamSchema.parse(input)).toThrow(ZodError);
   });
 });
-
-describe('refreshTokenSchema', () => {
-  it('accetta refresh token valido (64 caratteri hex)', () => {
-    const token = 'a'.repeat(64);
-    const input = { refreshToken: token };
-    expect(refreshTokenSchema.parse(input)).toEqual({ refreshToken: token });
-  });
-  it('rifiuta token troppo corto', () => {
-    const input = { refreshToken: 'a'.repeat(63) };
-    expect(() => refreshTokenSchema.parse(input)).toThrow(ZodError);
-  });
-  it('rifiuta token troppo lungo', () => {
-    const input = { refreshToken: 'a'.repeat(65) };
-    expect(() => refreshTokenSchema.parse(input)).toThrow(ZodError);
-  });
-  it('rifiuta token con caratteri non hex (lettere maiuscole)', () => {
-    const input = { refreshToken: 'A'.repeat(64) };
-    expect(() => refreshTokenSchema.parse(input)).toThrow(ZodError);
-  });
-  it('rifiuta token con caratteri non hex (caratteri speciali)', () => {
-    const input = { refreshToken: 'a'.repeat(63) + 'g' };
-    expect(() => refreshTokenSchema.parse(input)).toThrow(ZodError);
-  });
-});

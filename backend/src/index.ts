@@ -9,6 +9,7 @@ import utentiRoutes from './route/utenti.js';
 import registrazioniCopieRoutes from './route/registrazioniCopie.js';
 import istitutiRoutes from './route/istituti.js';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import healthRoutes from './route/health.js';
 import { getTrustProxy } from './middleware/rateLimit.js';
 const app = express();
@@ -44,14 +45,18 @@ app.use(
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
+        // 403 esplicito: vale anche come controllo dell'origine sulle rotte che usano il cookie di sessione
+        const error = new Error('Origine non consentita') as Error & { status?: number };
+        error.status = 403;
+        return callback(error, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }))
 app.use(express.json());
+// Necessario per leggere il cookie httpOnly del refresh token
+app.use(cookieParser());
 
 // Rotte di health check
 app.use('/api/health', healthRoutes);

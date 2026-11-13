@@ -327,14 +327,7 @@ export const uuidParamSchema = z.object({
   id: z.uuid('L\'ID deve essere un UUID valido'),
 });
 
-export const refreshTokenSchema = z.object({
- refreshToken: z.string().length(64, 'Il refresh token deve essere lungo 64 caratteri').regex(/^[a-f0-9]+$/, 'Il refresh token deve essere un valore esadecimale'),
-});
-
-
-
 // --- Tipi derivati dagli schema ---
-export type RefreshToken = z.infer<typeof refreshTokenSchema>;
 export type InsertIstituto = z.infer<typeof insertIstitutoSchema>;
 export type InsertDocente = z.infer<typeof insertDocenteSchema>;
 export type RegisterData = z.infer<typeof registerSchema>;

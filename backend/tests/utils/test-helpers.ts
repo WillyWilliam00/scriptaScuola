@@ -43,3 +43,21 @@ export async function loginAsCollaboratore() {
   };
 }
 
+
+/**
+ * Estrae il refresh token dal cookie httpOnly impostato dal server (intestazione Set-Cookie).
+ * Restituisce null se la risposta non imposta il cookie o lo cancella.
+ */
+export function getRefreshCookie(res: { headers: Record<string, unknown> }): string | null {
+  const raw = res.headers['set-cookie'];
+  const cookies = Array.isArray(raw) ? (raw as string[]) : raw ? [String(raw)] : [];
+  const cookie = cookies.find((c) => c.startsWith('refreshToken='));
+  if (!cookie) return null;
+  const value = cookie.split(';')[0]!.slice('refreshToken='.length);
+  return value || null;
+}
+
+/** Intestazione Cookie da inviare al server per presentare un refresh token. */
+export function refreshCookieHeader(token: string): string {
+  return `refreshToken=${token}`;
+}

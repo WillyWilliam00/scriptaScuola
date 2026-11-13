@@ -8,16 +8,19 @@ import { decodeJWT } from '../lib/jwt-utils.js';
  * 
  * Spiegazione Zustand:
  * - Zustand è una libreria di state management più leggera di Redux
- * - Il middleware persist salva automaticamente lo stato in localStorage
- * - All'avvio dell'app, lo stato viene ripristinato da localStorage
+ * - Il middleware persist salva in localStorage solo i dati dell'utente e dell'istituto
+ * - I token NON vengono mai salvati in localStorage:
+ *   - l'access token (15 minuti) vive solo in memoria
+ *   - il refresh token sta in un cookie httpOnly gestito dal server, invisibile a JavaScript
+ * - All'avvio dell'app i dati utente vengono ripristinati da localStorage e la sessione
+ *   viene riattivata chiedendo al server un nuovo access token (vedi restoreSession in lib/auth-api.ts)
  * - Pattern create<T>()() con doppie parentesi per TypeScript corretto
  * - Salvare sia dati utente che JWT payload permette accesso rapido senza decodificare ogni volta
  */
 
 interface AuthState {
-  // Token di autenticazione
+  // Access token: solo in memoria, mai in localStorage
   token: string | null;
-  refreshToken: string | null;
   
   // Dati utente completi (da LoginResponse)
   utente: {
@@ -40,13 +43,14 @@ interface AuthState {
   // Computed: verifica se l'utente è autenticato
   isAuthenticated: boolean;
 
-  // True finché il persist middleware non ha finito di leggere da localStorage
+  // True finché la sessione non è stata ripristinata all'avvio (vedi restoreSession)
   isInitializing: boolean;
   
   // Azioni
   login: (response: LoginResponse) => void;
   logout: () => void;
-  setTokens: (token: string, refreshToken: string) => void;
+  setToken: (token: string) => void;
+  setInitialized: () => void;
   setUser: (utente: AuthState['utente']) => void;
 }
 
@@ -55,7 +59,6 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       // Stato iniziale
       token: null,
-      refreshToken: null,
       utente: null,
       istituto: null,
       jwtPayload: null,
@@ -63,20 +66,19 @@ export const useAuthStore = create<AuthState>()(
       isInitializing: true,
 
       /**
-       * Login: salva token, refreshToken, dati utente e decodifica JWT payload
+       * Login: salva access token (in memoria), dati utente e payload del JWT
        * 
        * Spiegazione:
        * - Viene chiamato dopo un login riuscito
-       * - Salva tutti i dati necessari nello store
        * - Decodifica il JWT per estrarre il payload (userId, ruolo, istitutoId)
-       * - I dati vengono automaticamente persistiti in localStorage grazie al middleware persist
+       * - In localStorage finiscono solo utente, istituto e payload (vedi partialize)
+       * - Il refresh token non passa da qui: il server lo ha messo in un cookie httpOnly
        */
       login: (response: LoginResponse) => {
         const jwtPayload = decodeJWT(response.token);
         
         set({
           token: response.token,
-          refreshToken: response.refreshToken,
           utente: response.utente,
           istituto: response.istituto,
           jwtPayload,
@@ -95,7 +97,6 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({
           token: null,
-          refreshToken: null,
           utente: null,
           istituto: null,
           jwtPayload: null,
@@ -104,24 +105,23 @@ export const useAuthStore = create<AuthState>()(
       },
 
       /**
-       * setTokens: aggiorna solo i token (utile per refresh automatico)
+       * setToken: aggiorna l'access token dopo un rinnovo della sessione
        * 
        * Spiegazione:
-       * - Viene chiamato dall'interceptor quando fa refresh automatico
-       * - Aggiorna i token e calcola isAuthenticated usando la stessa logica di onRehydrateStorage
-       * - Garantisce coerenza: isAuthenticated è sempre calcolato con !!token && !!utente
+       * - Viene chiamato quando il server rilascia un nuovo access token (refresh)
+       * - isAuthenticated segue la stessa regola usata al ripristino: token e utente presenti
        */
-      setTokens: (token: string, refreshToken: string) => {
-        const jwtPayload = decodeJWT(token);
-        const currentState = get();
-        
+      setToken: (token: string) => {
         set({
           token,
-          refreshToken,
-          jwtPayload,
-          // Calcoliamo isAuthenticated usando la stessa logica di onRehydrateStorage
-          isAuthenticated: !!token && !!currentState.utente,
+          jwtPayload: decodeJWT(token),
+          isAuthenticated: !!token && !!get().utente,
         });
+      },
+
+      /** Segnala che il ripristino della sessione all'avvio è terminato. */
+      setInitialized: () => {
+        set({ isInitializing: false });
       },
 
       /**
@@ -134,20 +134,25 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage', // Chiave in localStorage
       storage: createJSONStorage(() => localStorage),
-      // Solo questi campi vengono persistiti
+      // Versione 1: i token non sono più persistiti.
+      // migrate ripulisce i dati salvati dalle versioni precedenti, che contenevano token e refreshToken.
+      version: 1,
+      migrate: (persisted) => {
+        const { utente, istituto, jwtPayload } = (persisted ?? {}) as Partial<AuthState>;
+        return { utente: utente ?? null, istituto: istituto ?? null, jwtPayload: jwtPayload ?? null };
+      },
+      // Solo questi campi vengono persistiti: nessun token
       partialize: (state) => ({
-        token: state.token,
-        refreshToken: state.refreshToken,
         utente: state.utente,
         istituto: state.istituto,
         jwtPayload: state.jwtPayload,
       }),
-      // Quando i dati vengono ripristinati da localStorage, calcoliamo isAuthenticated
-      // e segnaliamo che l'inizializzazione è completata
+      // Al ripristino da localStorage sappiamo solo chi era l'utente: lo consideriamo autenticato
+      // e lasciamo isInitializing a true finché restoreSession non ha ottenuto un access token
+      // (o ha scoperto che la sessione non è più valida).
       onRehydrateStorage: () => (state) => {
         if (state) {
-          state.isAuthenticated = !!state.token && !!state.utente;
-          state.isInitializing = false;
+          state.isAuthenticated = !!state.utente;
         }
       },
     }

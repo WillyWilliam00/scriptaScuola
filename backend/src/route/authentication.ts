@@ -1,7 +1,7 @@
 import express from 'express';
 import { asyncHandler, type ErrorWithStatus } from '../middleware/auth.js';
 import type { Request, Response } from 'express';
-import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, changePasswordSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente, type RefreshToken, refreshTokenSchema } from '../../../shared/validation.js';
+import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, changePasswordSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente } from '../../../shared/validation.js';
 import { istituti, refreshTokens, utenti } from '../db/schema.js';
 import { db } from '../db/index.js';
 import { and, eq, gt, isNull } from 'drizzle-orm';
@@ -9,9 +9,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../middleware/auth.js';
 import { createTenantStore } from '../db/tenantStore.js';
-import type { ChangePasswordResponse, LoginResponse, RefreshTokenResponse } from '../../../shared/types.js';
+import type { LoginResponse, RefreshTokenResponse } from '../../../shared/types.js';
 import { isEmailIdentifier } from '../db/utils/auth.js';
 import { createAuthLimiter } from '../middleware/rateLimit.js';
+import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from '../middleware/refreshCookie.js';
 import { hashRefreshToken, issueRefreshToken, revokeAllRefreshTokens } from '../db/utils/refreshTokens.js';
 const router = express.Router();
 
@@ -104,10 +105,11 @@ router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Respon
         {expiresIn: ACCESS_TOKEN_EXPIRATION}
 
     )
+    // Il refresh token va solo nel cookie httpOnly, mai nel corpo della risposta
     const refreshToken = await issueRefreshToken(db, utente.id);
+    setRefreshCookie(res, refreshToken);
     const response: LoginResponse = {
         token,
-        refreshToken,
         utente: {
             id: utente.id,
             email: utente.email,
@@ -123,19 +125,28 @@ router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Respon
     res.status(200).json(response)
 }))
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken} : RefreshToken = refreshTokenSchema.parse(req.body)
+    const refreshToken = readRefreshCookie(req)
 
-    await db.update(refreshTokens).set(
-        {
-            revokedAt: new Date(),
-        }).where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)))
+    // Idempotente: senza cookie (o con un cookie non valido) non c'è nulla da revocare
+    if (refreshToken) {
+        await db.update(refreshTokens).set(
+            {
+                revokedAt: new Date(),
+            }).where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)))
+    }
+    clearRefreshCookie(res)
     res.status(200).json({
         message: 'Logout effettuato con successo',
     })
 }))
 
 router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken} : RefreshToken = refreshTokenSchema.parse(req.body)
+    const refreshToken = readRefreshCookie(req)
+    if (!refreshToken) {
+        const error = new Error('Refresh token non valido o scaduto') as ErrorWithStatus;
+        error.status = 401;
+        throw error;
+    }
 
     const {  utente, newRefreshToken} = await db.transaction(async (tx) => {
         const [row] = await tx.select().from(refreshTokens)
@@ -170,9 +181,9 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
         JWT_SECRET,
         {expiresIn: ACCESS_TOKEN_EXPIRATION}
     )
+    setRefreshCookie(res, newRefreshToken)
     const response: RefreshTokenResponse = {
         token: newAccessToken,
-        refreshToken: newRefreshToken,
     }
     res.status(200).json(response)
 }))
@@ -217,9 +228,9 @@ changePasswordRouter.post('/change-password', asyncHandler(async (req: Request, 
         return issueRefreshToken(tx, utente.id);
     });
 
-    const response: ChangePasswordResponse = {
+    setRefreshCookie(res, refreshToken);
+    const response = {
         message: 'Password aggiornata con successo',
-        refreshToken,
     };
     res.status(200).json(response);
 }));
