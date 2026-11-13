@@ -454,7 +454,16 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     cleanUpdateValues
                 )
                 .where(and(eq(utenti.id, id), eq(utenti.istitutoId, istitutoId)))
-                .returning()
+                // Colonne esplicite: l'hash della password non deve mai uscire dallo store
+                .returning({
+                    id: utenti.id,
+                    email: utenti.email,
+                    username: utenti.username,
+                    ruolo: utenti.ruolo,
+                    istitutoId: utenti.istitutoId,
+                    createdAt: utenti.createdAt,
+                    updatedAt: utenti.updatedAt,
+                })
                 if(!utenteAggiornato) {
                     const error = new Error('Utente non trovato') as ErrorWithStatus;
                     error.status = 404;
