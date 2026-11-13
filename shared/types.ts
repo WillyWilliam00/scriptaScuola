@@ -135,6 +135,12 @@ export interface LoginResponse {
   };
 }
 
+/** Risposta del cambio password: le vecchie sessioni sono revocate, questo è il refresh token della sessione corrente. */
+export interface ChangePasswordResponse {
+  message: string;
+  refreshToken: string;
+}
+
 export interface RefreshTokenResponse {
   token: string;
   refreshToken?: string; //per rotazione token

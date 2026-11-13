@@ -6,6 +6,7 @@ import { seedTestData, testCredentials } from '../db/test-seed.js';
 import { refreshTokens } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { loginAsAdmin, loginAsCollaboratore } from '../utils/test-helpers.js';
+import { hashRefreshToken } from '../../src/db/utils/refreshTokens.js';
 
 describe('POST /api/auth/login', () => {
   beforeAll(async () => {
@@ -211,7 +212,7 @@ describe('POST /api/auth/logout', () => {
     const [tokenBefore] = await testDb
       .select()
       .from(refreshTokens)
-      .where(eq(refreshTokens.token, refreshToken));
+      .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
     
     expect(tokenBefore).toBeDefined();
     expect(tokenBefore?.revokedAt).toBeNull(); // Non ancora revocato
@@ -231,7 +232,7 @@ describe('POST /api/auth/logout', () => {
     const [tokenAfter] = await testDb
       .select()
       .from(refreshTokens)
-      .where(eq(refreshTokens.token, refreshToken));
+      .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
     
     expect(tokenAfter).toBeDefined();
     expect(tokenAfter?.revokedAt).not.toBeNull(); // Ora è revocato!
@@ -466,3 +467,92 @@ describe('POST /api/auth/change-password', () => {
   });
 });
 
+
+describe('Refresh token: hash nel database e revoca delle sessioni', () => {
+  beforeEach(async () => {
+    await cleanTestDb();
+    await seedTestData();
+  });
+
+  afterAll(async () => {
+    await cleanTestDb();
+  });
+
+  const login = (identifier: string, password: string) =>
+    request(app).post('/api/auth/login').send({ identifier, password });
+
+  it('non salva mai il refresh token in chiaro', async () => {
+    const loginRes = await login(testCredentials.admin.email, testCredentials.admin.password);
+    const refreshToken = loginRes.body.refreshToken as string;
+
+    const rows = await testDb.select().from(refreshTokens);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.tokenHash === refreshToken)).toBe(false);
+    expect(rows.some((r) => r.tokenHash === hashRefreshToken(refreshToken))).toBe(true);
+
+    // Anche dopo la rotazione il nuovo token è salvato solo come hash
+    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(refreshRes.status).toBe(200);
+    const rowsDopo = await testDb.select().from(refreshTokens);
+    expect(rowsDopo.some((r) => r.tokenHash === refreshRes.body.refreshToken)).toBe(false);
+  });
+
+  it('un hash letto dal database non funziona come refresh token', async () => {
+    const loginRes = await login(testCredentials.admin.email, testCredentials.admin.password);
+    const hash = hashRefreshToken(loginRes.body.refreshToken);
+
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: hash });
+    expect(res.status).toBe(401);
+  });
+
+  it('dopo il cambio password i vecchi refresh token restituiscono 401 e quello nuovo funziona', async () => {
+    // Due sessioni dello stesso utente (es. due dispositivi)
+    const sessioneA = await login(testCredentials.admin.email, testCredentials.admin.password);
+    const sessioneB = await login(testCredentials.admin.email, testCredentials.admin.password);
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${sessioneA.body.token}`)
+      .send({ currentPassword: testCredentials.admin.password, newPassword: 'nuovaPassword1' });
+    expect(res.status).toBe(200);
+    expect(res.body.refreshToken).toMatch(/^[a-f0-9]{64}$/);
+
+    for (const vecchio of [sessioneA.body.refreshToken, sessioneB.body.refreshToken]) {
+      const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: vecchio });
+      expect(refreshRes.status).toBe(401);
+    }
+
+    // La sessione di chi ha cambiato la password continua con il nuovo token
+    const nuovo = await request(app).post('/api/auth/refresh').send({ refreshToken: res.body.refreshToken });
+    expect(nuovo.status).toBe(200);
+  });
+
+  it('quando l\'admin imposta una nuova password a un utente, le sue sessioni vengono revocate', async () => {
+    const admin = await loginAsAdmin();
+    const collab = await login(testCredentials.collaboratore.username, testCredentials.collaboratore.password);
+    expect(collab.status).toBe(200);
+
+    const res = await request(app)
+      .put(`/api/utenti/update-utente/${collab.body.utente.id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ ruolo: 'collaboratore', username: testCredentials.collaboratore.username, password: 'passwordNuova1' });
+    expect(res.status).toBe(200);
+
+    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: collab.body.refreshToken });
+    expect(refreshRes.status).toBe(401);
+  });
+
+  it('una modifica dell\'utente senza nuova password non revoca le sessioni', async () => {
+    const admin = await loginAsAdmin();
+    const collab = await login(testCredentials.collaboratore.username, testCredentials.collaboratore.password);
+
+    const res = await request(app)
+      .put(`/api/utenti/update-utente/${collab.body.utente.id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ ruolo: 'collaboratore', username: 'collaboratore_rinominato' });
+    expect(res.status).toBe(200);
+
+    const refreshRes = await request(app).post('/api/auth/refresh').send({ refreshToken: collab.body.refreshToken });
+    expect(refreshRes.status).toBe(200);
+  });
+});

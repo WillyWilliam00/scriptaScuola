@@ -4,18 +4,17 @@ import type { Request, Response } from 'express';
 import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, changePasswordSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente, type RefreshToken, refreshTokenSchema } from '../../../shared/validation.js';
 import { istituti, refreshTokens, utenti } from '../db/schema.js';
 import { db } from '../db/index.js';
-import { and, eq, gt, isNull, lt } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../middleware/auth.js';
 import { createTenantStore } from '../db/tenantStore.js';
-import crypto from 'crypto';
-import type { LoginResponse, RefreshTokenResponse } from '../../../shared/types.js';
+import type { ChangePasswordResponse, LoginResponse, RefreshTokenResponse } from '../../../shared/types.js';
 import { isEmailIdentifier } from '../db/utils/auth.js';
+import { hashRefreshToken, issueRefreshToken, revokeAllRefreshTokens } from '../db/utils/refreshTokens.js';
 const router = express.Router();
 
 const ACCESS_TOKEN_EXPIRATION = '15m';
-const REFRESH_TOKEN_DAYS = 7;
 
 router.post('/setup-scuola', asyncHandler(async (req: Request, res: Response) => {
     //ricevo i dati dal body 
@@ -101,14 +100,7 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
         {expiresIn: ACCESS_TOKEN_EXPIRATION}
 
     )
-    const refreshToken = crypto.randomBytes(32).toString('hex');
-    const expires_at = new Date()
-    expires_at.setDate(expires_at.getDate() + REFRESH_TOKEN_DAYS);
-    await db.insert(refreshTokens).values({
-        token: refreshToken,
-        userId: utente.id,
-        expiresAt: expires_at,
-    })
+    const refreshToken = await issueRefreshToken(db, utente.id);
     const response: LoginResponse = {
         token,
         refreshToken,
@@ -132,7 +124,7 @@ router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
     await db.update(refreshTokens).set(
         {
             revokedAt: new Date(),
-        }).where(eq(refreshTokens.token, refreshToken))
+        }).where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)))
     res.status(200).json({
         message: 'Logout effettuato con successo',
     })
@@ -145,7 +137,7 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
         const [row] = await tx.select().from(refreshTokens)
         .where(
             and(
-                eq(refreshTokens.token, refreshToken),
+                eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)),
                 isNull(refreshTokens.revokedAt),
                 gt(refreshTokens.expiresAt, new Date())
             )
@@ -166,14 +158,7 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
             revokedAt: new Date(),
         }).where(eq(refreshTokens.id, row.id))
         
-        const newRefreshToken = crypto.randomBytes(32).toString('hex');
-        const expires_at = new Date()
-        expires_at.setDate(expires_at.getDate() + REFRESH_TOKEN_DAYS);
-        await tx.insert(refreshTokens).values({
-            token: newRefreshToken,
-            userId: utente.id,
-            expiresAt: expires_at,
-        })
+        const newRefreshToken = await issueRefreshToken(tx, utente.id);
         return { utente, newRefreshToken }
     })
     const newAccessToken = jwt.sign(
@@ -215,16 +200,24 @@ changePasswordRouter.post('/change-password', asyncHandler(async (req: Request, 
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await db.update(utenti)
-        .set({
-            passwordHash,
-            updatedAt: new Date(),
-        })
-        .where(eq(utenti.id, utente.id));
-
-    res.status(200).json({
-        message: 'Password aggiornata con successo',
+    // Cambio password, revoca di tutte le sessioni e nuova sessione per chi ha fatto la richiesta:
+    // tutto nella stessa transazione, così non restano sessioni vecchie valide.
+    const refreshToken = await db.transaction(async (tx) => {
+        await tx.update(utenti)
+            .set({
+                passwordHash,
+                updatedAt: new Date(),
+            })
+            .where(eq(utenti.id, utente.id));
+        await revokeAllRefreshTokens(tx, utente.id);
+        return issueRefreshToken(tx, utente.id);
     });
+
+    const response: ChangePasswordResponse = {
+        message: 'Password aggiornata con successo',
+        refreshToken,
+    };
+    res.status(200).json(response);
 }));
 
 export { changePasswordRouter };

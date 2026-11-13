@@ -10,13 +10,10 @@ export default defineConfig({
     testTimeout: 10000,
     // Pattern per i file di test
     include: ['**/*.test.ts', '**/*.integration.test.ts'],
-    // Disabilita il parallelismo per i test di integrazione
-    // I test di integrazione condividono lo stesso database e devono essere eseguiti in sequenza
+    // I test di integrazione condividono lo stesso database: i file vanno eseguiti uno alla volta.
+    // (In Vitest 4 `poolOptions.forks.singleFork` non esiste più: senza questa opzione i file
+    // girano in parallelo e i seed vanno in conflitto.)
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true, // Esegue tutti i test in sequenza su un singolo processo
-      },
-    },
+    fileParallelism: false,
   },
 });

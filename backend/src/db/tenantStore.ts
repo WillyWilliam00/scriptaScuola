@@ -12,6 +12,7 @@ import { wouldExceedLimit } from "./utils/limiti.js";
 import { stripUndefined } from "./utils/object.js";
 import { getSort } from "./utils/sort.js";
 import { isEmailIdentifier } from "./utils/auth.js";
+import { revokeAllRefreshTokens } from "./utils/refreshTokens.js";
 
 // Tipo helper per estrarre il tipo della transazione dal database
 type DbInstance = NodePgDatabase<typeof schema>;
@@ -458,6 +459,10 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     const error = new Error('Utente non trovato') as ErrorWithStatus;
                     error.status = 404;
                     throw error;
+                }
+                // Nuova password impostata dall'admin: le sessioni aperte dell'utente non valgono più
+                if(validateData.password) {
+                    await revokeAllRefreshTokens(db, utenteAggiornato.id);
                 }
                 return utenteAggiornato;
             },
