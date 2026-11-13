@@ -132,7 +132,7 @@ export function useDocentiInfinite(
   const pageSize = baseQuery.pageSize ?? 20;
 
   return useSuspenseInfiniteQuery({
-    queryKey: ['docenti', 'infinite', baseQuery],
+    queryKey: ['docenti', 'infinite', { ...baseQuery, pageSize }],
     queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams();
       params.append('page', String(pageParam));
