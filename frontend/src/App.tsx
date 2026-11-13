@@ -12,6 +12,7 @@ import LandingPage from "./components/landing/LandingPage.js";
 import { Toaster } from "sonner";
 // Code splitting: le pagine vengono caricate solo quando servono
 const Register = lazy(() => import("./components/auth/Register"));
+const PasswordDimenticata = lazy(() => import("./components/auth/PasswordDimenticata"));
 const RegistraCopie = lazy(() => import("./components/RegistraCopie"));
 const GestioneDocenti = lazy(() => import("./components/gestione-docenti/GestioneDocenti"));
 const GestioneUtenze = lazy(() => import("./components/gestione-utenze/GestioneUtenze"));
@@ -70,6 +71,14 @@ export function App() {
               element={
                 <PublicRoute>
                   <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/password-dimenticata"
+              element={
+                <PublicRoute>
+                  <PasswordDimenticata />
                 </PublicRoute>
               }
             />

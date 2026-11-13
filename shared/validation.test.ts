@@ -11,6 +11,7 @@ import {
   refreshTokenSchema,
   insertDocenteSchema,
   modifyUtenteSchema,
+  richiestaResetSchema,
   modifyDocenteSchema,
   insertRegistrazioneSchema,
   registrazioniCopieQuerySchema,
@@ -241,74 +242,84 @@ describe('utentiQuerySchema', () => {
   })
 })
 describe('createUtenteSchema', () => {
-  it('accetta utente admin con email e password', () => {
-    const input = { ruolo: 'admin', email: 'a@b.it', password: 'password123' };
+  it('accetta utente admin con email', () => {
+    const input = { ruolo: 'admin', email: 'a@b.it' };
     expect(createUtenteSchema.parse(input)).toEqual(input);
   });
 
-  it('accetta collaboratore con username senza @ e password', () => {
-    const input = { ruolo: 'collaboratore', username: 'mariorossi', password: 'password123' };
+  it('accetta collaboratore con username senza @', () => {
+    const input = { ruolo: 'collaboratore', username: 'mariorossi' };
     expect(createUtenteSchema.parse(input)).toEqual(input);
+  });
+
+  it('scarta la password: la genera la piattaforma', () => {
+    const input = { ruolo: 'collaboratore', username: 'mariorossi', password: 'password123' };
+    expect(createUtenteSchema.parse(input)).toEqual({ ruolo: 'collaboratore', username: 'mariorossi' });
   });
 
   it('rifiuta collaboratore con username che contiene @', () => {
-    const input = { ruolo: 'collaboratore', username: 'mario@rossi', password: 'password123' };
-    expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
-  });
-  it('rifiuta password troppo corta per admin', () => {
-    const input = { ruolo: 'admin', email: 'a@b.it', password: '1234567' };
-    expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
-  });
-  it('rifiuta password troppo corta per collaboratore', () => {
-    const input = { ruolo: 'collaboratore', username: 'mariorossi', password: '1234567' };
+    const input = { ruolo: 'collaboratore', username: 'mario@rossi' };
     expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
   });
   it('rifiuta email non valida per admin', () => {
-    const input = { ruolo: 'admin', email: 'emailinvalida', password: 'password123' };
+    const input = { ruolo: 'admin', email: 'emailinvalida' };
     expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
   });
   it('rifiuta username troppo corto per collaboratore', () => {
-    const input = { ruolo: 'collaboratore', username: 'ab', password: 'password123' };
+    const input = { ruolo: 'collaboratore', username: 'ab' };
     expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
   });
   it('rifiuta ruolo non valido', () => {
-    const input = { ruolo: 'superadmin', email: 'a@b.it', password: 'password123' };
+    const input = { ruolo: 'superadmin', email: 'a@b.it' };
     expect(() => createUtenteSchema.parse(input)).toThrow(ZodError);
   });
 });
 
 describe('modifyUtenteSchema', () => {
-  it('accetta utente admin con email e password', () => {
-    const input = { ruolo: 'admin', email: 'a@b.it', password: 'password123' };
+  it('accetta utente admin con email', () => {
+    const input = { ruolo: 'admin', email: 'a@b.it' };
     expect(modifyUtenteSchema.parse(input)).toEqual(input);
   });
-  it('accetta collaboratore con username senza @ e password', () => {
-    const input = { ruolo: 'collaboratore', username: 'mariorossi', password: 'password123' };
+  it('accetta collaboratore con username senza @', () => {
+    const input = { ruolo: 'collaboratore', username: 'mariorossi' };
     expect(modifyUtenteSchema.parse(input)).toEqual(input);
   })
-  it('rifiuta password troppo corta', () => {
-    const input = { ruolo: 'admin', email: 'a@b.it', password: '1234567' };
-    expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
+  it('scarta la password: si reimposta solo con la password temporanea', () => {
+    const input = { ruolo: 'admin', email: 'a@b.it', password: 'password123' };
+    expect(modifyUtenteSchema.parse(input)).toEqual({ ruolo: 'admin', email: 'a@b.it' });
   })
   it('rifiuta username troppo corto', () => {
-    const input = { ruolo: 'collaboratore', username: 'm', password: 'password123' };
+    const input = { ruolo: 'collaboratore', username: 'm' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
   it('rifiuta ruolo non valido', () => {
-    const input = { ruolo: 'admino', email: 'a@b.it', password: 'password123' };
+    const input = { ruolo: 'admino', email: 'a@b.it' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
   it('rifiuta email non valida', () => {
-    const input = { ruolo: 'admin', email: 'ab', password: 'password123' };
+    const input = { ruolo: 'admin', email: 'ab' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
+  // Falliscono già su develop: vedi issue #35 (lo schema non è strict)
   it('rifiuta campi extra non permessi per admin (strict)', () => {
-    const input = { ruolo: 'admin', email: 'a@b.it', password: 'password123', campoExtra: 'x' };
+    const input = { ruolo: 'admin', email: 'a@b.it', campoExtra: 'x' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
   })
   it('rifiuta campi extra non permessi per collaboratore (strict)', () => {
-    const input = { ruolo: 'collaboratore', username: 'mariorossi', password: 'password123', campoExtra: 'x' };
+    const input = { ruolo: 'collaboratore', username: 'mariorossi', campoExtra: 'x' };
     expect(() => modifyUtenteSchema.parse(input)).toThrow(ZodError);
+  })
+})
+
+describe('richiestaResetSchema', () => {
+  it('accetta username con nota facoltativa', () => {
+    expect(richiestaResetSchema.parse({ username: 'mariorossi' })).toEqual({ username: 'mariorossi' });
+    expect(richiestaResetSchema.parse({ username: ' mariorossi ', nota: ' segreteria ' }))
+      .toEqual({ username: 'mariorossi', nota: 'segreteria' });
+  })
+  it('rifiuta username vuoto e nota troppo lunga', () => {
+    expect(() => richiestaResetSchema.parse({ username: '  ' })).toThrow(ZodError);
+    expect(() => richiestaResetSchema.parse({ username: 'mario', nota: 'x'.repeat(201) })).toThrow(ZodError);
   })
 })
 describe('modifyDocenteSchema', () => {

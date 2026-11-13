@@ -18,6 +18,7 @@ import { Link } from "react-router-dom"
 import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "./store/auth-store"
 import { useQueryClient } from "@tanstack/react-query"
+import { useRichiesteReset } from "./hooks/use-richieste-reset"
 import { logout } from "./lib/auth-api"
 import { Popover, PopoverTrigger, PopoverContent, PopoverHeader, PopoverTitle, PopoverDescription } from "@/components/ui/popover"
 export function AppSidebar() {
@@ -29,6 +30,9 @@ export function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   const { jwtPayload } = useAuthStore()
   const isAdmin = jwtPayload?.ruolo === "admin"
+  // Richieste di nuova password in attesa: badge su "Gestione Utenze" (solo admin)
+  const { data: richiesteReset } = useRichiesteReset()
+  const numeroRichieste = richiesteReset?.length ?? 0
   const menuItems = [
     { title: "Registra Copie ", url: "/registra-copie", icon: CameraIcon, isProtected: false },
     { title: "Gestione Docenti", url: "/gestione-docenti", icon: FileIcon, isProtected: true },
@@ -61,7 +65,18 @@ export function AppSidebar() {
                   <SidebarMenuItem>
                     <SidebarMenuButton className="rounded-none h-12 text-sidebar-border hover:text-primary w-full justify-between gap-2 " >
 
-                      <p className="font-semibold">{item.title}</p>
+                      <p className="font-semibold flex items-center gap-2">
+                        {item.title}
+                        {item.url === "/gestione-utenze" && numeroRichieste > 0 && (
+                          <span
+                            className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-amber-950 text-xs font-bold"
+                            title={`${numeroRichieste} richieste di nuova password`}
+                            data-testid="badge-richieste-reset"
+                          >
+                            {numeroRichieste}
+                          </span>
+                        )}
+                      </p>
                       <HugeiconsIcon icon={item.icon} strokeWidth={2} />
 
                     </SidebarMenuButton>

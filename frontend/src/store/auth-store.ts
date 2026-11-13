@@ -28,6 +28,8 @@ interface AuthState {
     email: string | null;
     username: string | null;
     ruolo: 'admin' | 'collaboratore';
+    // true finché l'utente usa una password temporanea (va cambiata prima di continuare)
+    deveCambiarePassword?: boolean;
   } | null;
   
   // Dati istituto (da LoginResponse)
@@ -52,6 +54,7 @@ interface AuthState {
   setToken: (token: string) => void;
   setInitialized: () => void;
   setUser: (utente: AuthState['utente']) => void;
+  setDeveCambiarePassword: (valore: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -129,6 +132,13 @@ export const useAuthStore = create<AuthState>()(
        */
       setUser: (utente: AuthState['utente']) => {
         set({ utente });
+      },
+
+      /** Segna se l'utente deve cambiare la password temporanea (vedi ProtectedRoute). */
+      setDeveCambiarePassword: (valore: boolean) => {
+        const utente = get().utente;
+        if (!utente) return;
+        set({ utente: { ...utente, deveCambiarePassword: valore } });
       },
     }),
     {

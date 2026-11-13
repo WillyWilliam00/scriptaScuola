@@ -1,5 +1,5 @@
 import { check } from 'drizzle-orm/pg-core';
-import { integer, pgTable, text, timestamp, varchar, uuid, pgEnum, index } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, varchar, uuid, pgEnum, index, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const istituti = pgTable('istituti', {
@@ -31,6 +31,10 @@ export const utenti = pgTable('utenti', {
     istitutoId: integer('istituto_id').notNull().references(() => istituti.id, { onDelete: 'cascade' }),
     ruolo: ruoloEnum('ruolo').notNull().default('collaboratore'),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    // Password temporanea generata dalla piattaforma (nuova utenza o reset):
+    // l'utente deve cambiarla al primo accesso, e scade dopo 48 ore.
+    deveCambiarePassword: boolean('deve_cambiare_password').notNull().default(false),
+    passwordTemporaneaScadeAt: timestamp('password_temporanea_scade_at'),
 }, (table) => [
     check('utenti_at_least_one_identifier', sql`${table.username} IS NOT NULL OR ${table.email} IS NOT NULL`),
     index('idx_utenti_istituto_id').on(table.istitutoId),
@@ -69,3 +73,20 @@ export const refreshTokens = pgTable('refresh_tokens', {
     index('idx_refresh_tokens_user_id').on(table.userId),
     index('idx_refresh_tokens_token').on(table.tokenHash),
 ])
+
+// Richieste di reset password inviate dai collaboratori dalla pagina "Password dimenticata?".
+// Le vedono gli admin dell'istituto in Gestione utenze.
+export const esitoRichiestaResetEnum = pgEnum('esito_richiesta_reset', ['password_generata', 'ignorata']);
+export const richiesteResetPassword = pgTable('richieste_reset_password', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    utenteId: uuid('utente_id').notNull().references(() => utenti.id, { onDelete: 'cascade' }),
+    istitutoId: integer('istituto_id').notNull().references(() => istituti.id, { onDelete: 'cascade' }),
+    nota: varchar('nota', { length: 200 }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    gestitaAt: timestamp('gestita_at'),
+    gestitaDa: uuid('gestita_da').references(() => utenti.id, { onDelete: 'set null' }),
+    esito: esitoRichiestaResetEnum('esito'),
+}, (table) => [
+    index('idx_richieste_reset_istituto_id').on(table.istitutoId),
+    index('idx_richieste_reset_utente_id').on(table.utenteId),
+]);

@@ -1,8 +1,9 @@
 import express from 'express';
 import { asyncHandler, type ErrorWithStatus } from '../middleware/auth.js';
 import type { Request, Response } from 'express';
-import { insertIstitutoSchema, loginSchema, registerSchema, createUtenteSchema, changePasswordSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente } from '../../../shared/validation.js';
-import { istituti, refreshTokens, utenti } from '../db/schema.js';
+import { insertIstitutoSchema, loginSchema, registerSchema, changePasswordSchema, richiestaResetSchema, type InsertIstituto, type LoginData, type RegisterData, type CreateUtente } from '../../../shared/validation.js';
+import { istituti, refreshTokens, richiesteResetPassword, utenti } from '../db/schema.js';
+import { inizioFinestraRichieste } from '../db/utils/passwordTemporanea.js';
 import { db } from '../db/index.js';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
@@ -18,6 +19,8 @@ const router = express.Router();
 
 // Limite ai tentativi sulle rotte pubbliche (vedi middleware/rateLimit.ts)
 const authLimiter = createAuthLimiter();
+// Più stretto: ogni richiesta finisce davanti agli admin dell'istituto
+const richiestaResetLimiter = createAuthLimiter({ limit: 5, windowMs: 60 * 60 * 1000 });
 
 const ACCESS_TOKEN_EXPIRATION = '15m';
 
@@ -55,9 +58,9 @@ router.post('/setup-scuola', authLimiter, asyncHandler(async (req: Request, res:
         const utenteAdminData: Extract<CreateUtente, { ruolo: 'admin' }> = {
             ruolo: 'admin',
             email: dataUtente.email,
-            password: dataUtente.password,
         };
-        const utente = await tenantStore.utenti.create(utenteAdminData);
+        // Alla registrazione l'admin sceglie la sua password: niente password temporanea
+        const { utente } = await tenantStore.utenti.create(utenteAdminData, { password: dataUtente.password });
         
         return { istituto, utente }
     })
@@ -90,6 +93,13 @@ router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Respon
         error.status = 401;
         throw error;
     }
+
+    // Password temporanea non cambiata in tempo: serve un nuovo reset da parte degli admin
+    if (utente.deveCambiarePassword && utente.passwordTemporaneaScadeAt && utente.passwordTemporaneaScadeAt <= new Date()) {
+        const error = new Error('La password temporanea è scaduta. Chiedi agli amministratori del tuo istituto di generarne una nuova.') as ErrorWithStatus;
+        error.status = 401;
+        throw error;
+    }
     
     // Recupera dati istituto
     const [istituto] = await db.select().from(istituti).where(eq(istituti.id, utente.istitutoId))
@@ -115,6 +125,7 @@ router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Respon
             email: utente.email,
             username: utente.username,
             ruolo: utente.ruolo,
+            deveCambiarePassword: utente.deveCambiarePassword,
         },
         istituto: {
             id: istituto.id,
@@ -188,6 +199,41 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
     res.status(200).json(response)
 }))
 
+const MESSAGGIO_RICHIESTA_RESET = 'Se lo username esiste, gli amministratori del tuo istituto hanno ricevuto la richiesta. Ti daranno una password temporanea.';
+
+/**
+ * POST /api/auth/richiesta-reset
+ * Un collaboratore che ha dimenticato la password chiede agli admin del suo istituto
+ * una password temporanea. Risponde sempre allo stesso modo, così non si può scoprire
+ * quali username esistono. Al massimo una richiesta aperta per utenza.
+ */
+router.post('/richiesta-reset', richiestaResetLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const { username, nota } = richiestaResetSchema.parse(req.body);
+
+    const [utente] = await db.select({ id: utenti.id, istitutoId: utenti.istitutoId })
+        .from(utenti)
+        .where(and(eq(utenti.username, username), eq(utenti.ruolo, 'collaboratore')));
+
+    if (utente) {
+        const [richiestaAperta] = await db.select({ id: richiesteResetPassword.id })
+            .from(richiesteResetPassword)
+            .where(and(
+                eq(richiesteResetPassword.utenteId, utente.id),
+                isNull(richiesteResetPassword.gestitaAt),
+                gt(richiesteResetPassword.createdAt, inizioFinestraRichieste()),
+            ));
+        if (!richiestaAperta) {
+            await db.insert(richiesteResetPassword).values({
+                utenteId: utente.id,
+                istitutoId: utente.istitutoId,
+                nota: nota || null,
+            });
+        }
+    }
+
+    res.status(200).json({ message: MESSAGGIO_RICHIESTA_RESET });
+}));
+
 const changePasswordRouter = express.Router();
 
 changePasswordRouter.post('/change-password', asyncHandler(async (req: Request, res: Response) => {
@@ -221,6 +267,9 @@ changePasswordRouter.post('/change-password', asyncHandler(async (req: Request, 
         await tx.update(utenti)
             .set({
                 passwordHash,
+                // La password scelta dall'utente sostituisce quella temporanea
+                deveCambiarePassword: false,
+                passwordTemporaneaScadeAt: null,
                 updatedAt: new Date(),
             })
             .where(eq(utenti.id, utente.id));

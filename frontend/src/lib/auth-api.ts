@@ -113,6 +113,8 @@ export async function changePassword(
 ): Promise<{ message: string }> {
   const payload: ChangePassword = { currentPassword, newPassword };
   const response = await api.post<{ message: string }>('/auth/change-password', payload);
+  // Una password scelta dall'utente sostituisce sempre quella temporanea
+  useAuthStore.getState().setDeveCambiarePassword(false);
   return response.data;
 }
 

@@ -165,6 +165,9 @@ export default function Login() {
                   </Button>
                 )}
               </form.Subscribe>
+              <Link to="/password-dimenticata" className="text-sm text-muted-foreground block text-center mt-3">
+                <span className="text-sm text-muted-foreground underline hover:text-primary">Password dimenticata?</span>
+              </Link>
               <Link to="/register" className="text-sm text-muted-foreground block text-center mt-2">
                 <span className="text-sm text-muted-foreground underline hover:text-primary">Registrati</span>
               </Link>

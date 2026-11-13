@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, ilike, ne, or, type AnyColumn } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, isNull, ne, or, type AnyColumn } from "drizzle-orm";
 import { bulkImportDocentiSchema, createUtenteSchema, docentiQuerySchema, insertDocenteSchema, insertRegistrazioneSchema, modifyDocenteSchema, modifyRegistrazioneSchema, modifyUtenteSchema, registrazioniCopieQuerySchema, utentiQuerySchema, type BulkImportDocenti, type CreateUtente, type DocentiQuery, type InsertDocente, type InsertRegistrazione, type ModifyDocente, type ModifyRegistrazione, type ModifyUtente, type RegistrazioniCopieQuery, type UtentiQuery } from "../../../shared/validation.js"
-import { docenti, istituti, registrazioniCopie, utenti } from "./schema.js";
+import { docenti, istituti, registrazioniCopie, richiesteResetPassword, utenti } from "./schema.js";
 import type { DocentiPaginatedResponse, DocentiSort, UtentiPaginatedResponse, UtentiSort, Utente, RegistrazioniCopieSort, RegistrazioniCopiePaginatedResponse } from "../../../shared/types.js";
 import { SQL, sql } from "drizzle-orm";
 import type { ErrorWithStatus } from "../middleware/auth.js";
@@ -13,6 +13,7 @@ import { stripUndefined } from "./utils/object.js";
 import { getSort } from "./utils/sort.js";
 import { isEmailIdentifier } from "./utils/auth.js";
 import { revokeAllRefreshTokens } from "./utils/refreshTokens.js";
+import { inizioFinestraRichieste, valoriPasswordTemporanea } from "./utils/passwordTemporanea.js";
 
 // Tipo helper per estrarre il tipo della transazione dal database
 type DbInstance = NodePgDatabase<typeof schema>;
@@ -364,7 +365,12 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
 
                 return result as Utente[];
             },
-            create: async(data: Omit<CreateUtente, 'istitutoId'>) => {
+            /**
+             * Crea un'utenza. Senza `opzioni.password` la piattaforma genera una password temporanea
+             * (da cambiare al primo accesso) e la restituisce una sola volta in `passwordTemporanea`.
+             * La password scelta si usa solo alla registrazione dell'istituto.
+             */
+            create: async(data: Omit<CreateUtente, 'istitutoId'>, opzioni: { password?: string } = {}) => {
                 const validateData = createUtenteSchema.parse(data);
                 const isAdmin = validateData.ruolo === 'admin';
                 const utenteEsistente = await db.select().from(utenti)
@@ -378,13 +384,15 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     error.status = 400;
                     throw error;
                 }
-                const saltRounds = 10;
-                const passwordHash = await bcrypt.hash(validateData.password, saltRounds);
+                const temporanea = opzioni.password ? null : await valoriPasswordTemporanea();
+                const valoriPassword = temporanea
+                    ? temporanea.valori
+                    : { passwordHash: await bcrypt.hash(opzioni.password!, 10) };
                 const [nuovoUtente] = await db.insert(utenti)
                 .values({
                     email: isAdmin ? validateData.email : null,
                     username: isAdmin ? null : validateData.username,
-                    passwordHash,
+                    ...valoriPassword,
                     ruolo: validateData.ruolo,
                     istitutoId,
                 })
@@ -402,7 +410,11 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     error.status = 500;
                     throw error;
                 }
-                return nuovoUtente;
+                return {
+                    utente: nuovoUtente,
+                    passwordTemporanea: temporanea?.passwordTemporanea ?? null,
+                    scadeAt: temporanea?.valori.passwordTemporaneaScadeAt ?? null,
+                };
             },
             update: async(id: string, data: Omit<ModifyUtente, 'istitutoId'>) => {
                 const validateData = modifyUtenteSchema.parse(data);
@@ -441,12 +453,7 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     }
                     updateValues.username = validateData.username;
                 }
-                if(validateData.password) {
-                    const saltRounds = 10;
-                    const passwordHash = await bcrypt.hash(validateData.password, saltRounds);
-                    updateValues.passwordHash = passwordHash;
-                }
-                const {password, ruolo, ...rest} = validateData;
+                const {ruolo, ...rest} = validateData;
                 Object.assign(updateValues, rest);
                 const cleanUpdateValues = stripUndefined(updateValues);
                 
@@ -469,11 +476,81 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     error.status = 404;
                     throw error;
                 }
-                // Nuova password impostata dall'admin: le sessioni aperte dell'utente non valgono più
-                if(validateData.password) {
-                    await revokeAllRefreshTokens(db, utenteAggiornato.id);
-                }
                 return utenteAggiornato;
+            },
+            /**
+             * Genera una nuova password temporanea per un'utenza dell'istituto (reset fatto da un admin).
+             * Revoca le sessioni aperte e chiude le richieste di reset ancora aperte per quell'utenza.
+             */
+            generaPasswordTemporanea: async(id: string, adminId: string) => {
+                if (id === adminId) {
+                    const error = new Error('Per cambiare la tua password usa la pagina Profilo') as ErrorWithStatus;
+                    error.status = 400;
+                    throw error;
+                }
+                const { passwordTemporanea, valori } = await valoriPasswordTemporanea();
+                const eseguiReset = async (tx: Transaction) => {
+                    const [aggiornato] = await tx.update(utenti)
+                        .set({ ...valori, updatedAt: new Date() })
+                        .where(and(eq(utenti.id, id), eq(utenti.istitutoId, istitutoId)))
+                        .returning({ id: utenti.id });
+                    if (!aggiornato) {
+                        const error = new Error('Utente non trovato') as ErrorWithStatus;
+                        error.status = 404;
+                        throw error;
+                    }
+                    await revokeAllRefreshTokens(tx, id);
+                    await tx.update(richiesteResetPassword)
+                        .set({ gestitaAt: new Date(), gestitaDa: adminId, esito: 'password_generata' })
+                        .where(and(
+                            eq(richiesteResetPassword.utenteId, id),
+                            eq(richiesteResetPassword.istitutoId, istitutoId),
+                            isNull(richiesteResetPassword.gestitaAt),
+                        ));
+                };
+                // Dentro una transazione esistente Drizzle usa un savepoint
+                await db.transaction(eseguiReset);
+                return {
+                    passwordTemporanea,
+                    scadeAt: valori.passwordTemporaneaScadeAt,
+                };
+            },
+            /** Richieste di reset aperte (non gestite, degli ultimi 7 giorni), dalla più recente. */
+            getRichiesteReset: async() => {
+                return db.select({
+                    id: richiesteResetPassword.id,
+                    utenteId: richiesteResetPassword.utenteId,
+                    username: utenti.username,
+                    email: utenti.email,
+                    ruolo: utenti.ruolo,
+                    nota: richiesteResetPassword.nota,
+                    createdAt: richiesteResetPassword.createdAt,
+                })
+                .from(richiesteResetPassword)
+                .innerJoin(utenti, eq(utenti.id, richiesteResetPassword.utenteId))
+                .where(and(
+                    eq(richiesteResetPassword.istitutoId, istitutoId),
+                    isNull(richiesteResetPassword.gestitaAt),
+                    gt(richiesteResetPassword.createdAt, inizioFinestraRichieste()),
+                ))
+                .orderBy(desc(richiesteResetPassword.createdAt));
+            },
+            /** Segna una richiesta di reset come ignorata. */
+            ignoraRichiestaReset: async(richiestaId: string, adminId: string) => {
+                const [richiesta] = await db.update(richiesteResetPassword)
+                    .set({ gestitaAt: new Date(), gestitaDa: adminId, esito: 'ignorata' })
+                    .where(and(
+                        eq(richiesteResetPassword.id, richiestaId),
+                        eq(richiesteResetPassword.istitutoId, istitutoId),
+                        isNull(richiesteResetPassword.gestitaAt),
+                    ))
+                    .returning({ id: richiesteResetPassword.id });
+                if (!richiesta) {
+                    const error = new Error('Richiesta non trovata o già gestita') as ErrorWithStatus;
+                    error.status = 404;
+                    throw error;
+                }
+                return richiesta.id;
             },
             delete: async(id: string) => {
                 const [utenteEliminato] = await db.delete(utenti)

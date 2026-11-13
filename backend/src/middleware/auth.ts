@@ -6,6 +6,7 @@ import { extractBearerToken } from '../db/utils/extractBearerToken.js';
 import { db } from '../db/index.js';
 import { utenti } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { CAMBIO_PASSWORD_OBBLIGATORIO } from '../../../shared/types.js';
 
 
 export const asyncHandler = (fn: any) => (req: Request, res: Response, next: NextFunction) => {
@@ -43,38 +44,55 @@ export const JWT_SECRET = process.env.JWT_SECRET!
  * Nota: Express gestisce automaticamente i Promise reject nei middleware async,
  * quindi gli errori non gestiti verranno passati all'errorHandler globale
  */
-export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-    const token = extractBearerToken(req.headers.authorization);
-    if(!token) {
-        res.status(401).json({ error: 'Token mancante' });
-        return
-    }
-    try {
-        // Verifica validità e scadenza del token
-        const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
-        
-        // Verifica che l'utente esista ancora nel database
-        // Questo previene l'uso di token validi per utenti eliminati
-        const [utente] = await db.select().from(utenti)
-            .where(eq(utenti.id, payload.userId));
-        
-        if(!utente) {
-            res.status(401).json({ error: 'Utente non trovato o account eliminato' });
+export function createAuthMiddleware(opzioni: { consentiCambioObbligato?: boolean } = {}) {
+    return async function authMiddleware(req: Request, res: Response, next: NextFunction) {
+        const token = extractBearerToken(req.headers.authorization);
+        if(!token) {
+            res.status(401).json({ error: 'Token mancante' });
             return
         }
-        
-        req.user = payload;
-        next()
-    } catch(error) {
-        // jwt.verify lancia un errore se il token è invalido o scaduto
-        if(error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
-            res.status(401).json({ error: 'Token non valido o scaduto' });
-            return
+        try {
+            // Verifica validità e scadenza del token
+            const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+            
+            // Verifica che l'utente esista ancora nel database
+            // Questo previene l'uso di token validi per utenti eliminati
+            const [utente] = await db.select().from(utenti)
+                .where(eq(utenti.id, payload.userId));
+            
+            if(!utente) {
+                res.status(401).json({ error: 'Utente non trovato o account eliminato' });
+                return
+            }
+
+            // Con una password temporanea si può solo cambiarla: tutto il resto è bloccato
+            if(utente.deveCambiarePassword && !opzioni.consentiCambioObbligato) {
+                res.status(403).json({
+                    error: 'Devi cambiare la password temporanea prima di continuare',
+                    code: CAMBIO_PASSWORD_OBBLIGATORIO,
+                });
+                return
+            }
+            
+            req.user = payload;
+            next()
+        } catch(error) {
+            // jwt.verify lancia un errore se il token è invalido o scaduto
+            if(error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+                res.status(401).json({ error: 'Token non valido o scaduto' });
+                return
+            }
+            // Se è un errore del database o altro, passalo all'errorHandler globale
+            next(error);
         }
-        // Se è un errore del database o altro, passalo all'errorHandler globale
-        next(error);
     }
 }
+
+/** Middleware di autenticazione per tutte le rotte protette. */
+export const authMiddleware = createAuthMiddleware();
+
+/** Come authMiddleware, ma lascia passare chi deve ancora cambiare la password temporanea. */
+export const authMiddlewareCambioPassword = createAuthMiddleware({ consentiCambioObbligato: true });
 
 export function requireRole(...roles: Array<'admin' | 'collaboratore'>) {
     return (req: Request, res: Response, next: NextFunction) => {

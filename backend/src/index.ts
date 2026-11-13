@@ -1,7 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import 'dotenv/config';
 import cors from 'cors';
-import { authMiddleware, requireRole, errorHandler } from './middleware/auth.js';
+import { authMiddleware, authMiddlewareCambioPassword, requireRole, errorHandler } from './middleware/auth.js';
 import { tenantStoreMiddleware } from './middleware/tenantStore.js';
 import authenticationRoutes, { changePasswordRouter } from './route/authentication.js';
 import docentiRoutes from './route/docenti.js';
@@ -65,7 +65,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authenticationRoutes);
 
 // Cambio password: autenticato, disponibile a tutti i ruoli
-app.use('/api/auth', authMiddleware, changePasswordRouter);
+app.use('/api/auth', authMiddlewareCambioPassword, changePasswordRouter);
 
 // Rotte protette - richiedono autenticazione e tenantStore
 // Docenti: accessibili a admin e collaboratori

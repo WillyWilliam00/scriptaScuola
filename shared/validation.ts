@@ -31,35 +31,22 @@ export const registerSchema = z.object({
 // Se ruolo è 'collaboratore' → serve username (senza @)
 
 
+// La password non si sceglie in creazione: la genera la piattaforma (password temporanea,
+// da cambiare al primo accesso). Per reimpostarla c'è l'endpoint della password temporanea.
 export const createUtenteSchema = z.discriminatedUnion('ruolo', [
   z.object({
     ruolo: z.literal('admin'),
     email: z.email('Formato email non valido'),
-    password: z.string().min(8, 'La password deve essere di almeno 8 caratteri'),
   }),
   z.object({
     ruolo: z.literal('collaboratore'),
     username: z.string()
       .min(3, 'Il username deve essere lungo almeno 3 caratteri')
       .refine((val) => !val.includes('@'), { message: 'Il username non può contenere @' }),
-    password: z.string().min(8, 'La password deve essere di almeno 8 caratteri'),
   }),
 ]);
 
-export const modifyUtenteSchema = z.discriminatedUnion('ruolo', [
-  z.object({
-    ruolo: z.literal('admin'),
-    email: z.email('Formato email non valido'),
-    password: z.string().min(8, 'La password deve essere di almeno 8 caratteri').or(z.literal('')).optional(),
-  }),
-  z.object({
-    ruolo: z.literal('collaboratore'),
-    username: z.string()
-      .min(3, 'Il username deve essere lungo almeno 3 caratteri')
-      .refine((val) => !val.includes('@'), { message: 'Il username non può contenere @' }),
-    password: z.string().min(8, 'La password deve essere di almeno 8 caratteri').or(z.literal('')).optional(),
-  })
-]);
+export const modifyUtenteSchema = createUtenteSchema;
 
 const passwordMin8 = z.string().min(8, 'La password deve essere di almeno 8 caratteri');
 
@@ -72,7 +59,6 @@ const utenteFormBaseSchema = z.object({
   ruolo: z.enum(['admin', 'collaboratore']),
   email: z.string(),
   username: z.string(),
-  password: z.string(),
 });
 
 const refineUtenteFormRuolo = (data: z.infer<typeof utenteFormBaseSchema>, ctx: z.RefinementCtx) => {
@@ -104,15 +90,21 @@ const refineUtenteFormRuolo = (data: z.infer<typeof utenteFormBaseSchema>, ctx: 
   }
 };
 
-/** Form di creazione utente: la password è obbligatoria. */
-export const createUtenteFormSchema = utenteFormBaseSchema
-  .extend({ password: passwordMin8 })
-  .superRefine(refineUtenteFormRuolo);
+/** Form di creazione e modifica utente (la password la genera la piattaforma). */
+export const utenteFormSchema = utenteFormBaseSchema.superRefine(refineUtenteFormRuolo);
+export const createUtenteFormSchema = utenteFormSchema;
+export const modifyUtenteFormSchema = utenteFormSchema;
 
-/** Form di modifica utente: la password è opzionale (vuota = invariata). */
-export const modifyUtenteFormSchema = utenteFormBaseSchema
-  .extend({ password: passwordMin8.or(z.literal('')) })
-  .superRefine(refineUtenteFormRuolo);
+/** Richiesta di reset dalla pagina "Password dimenticata?" (solo collaboratori, per username). */
+export const richiestaResetSchema = z.object({
+  username: z.string().trim().min(1, 'Inserisci il tuo username').max(255),
+  nota: z.string().trim().max(200, 'La nota può contenere al massimo 200 caratteri').optional(),
+});
+export type RichiestaReset = z.infer<typeof richiestaResetSchema>;
+/** Variante per il form: la nota è sempre una stringa (vuota = nessuna nota). */
+export const richiestaResetFormSchema = richiestaResetSchema.extend({
+  nota: z.string().max(200, 'La nota può contenere al massimo 200 caratteri'),
+});
 
 export const changePasswordSchema = z.object({
   currentPassword: passwordMin8,

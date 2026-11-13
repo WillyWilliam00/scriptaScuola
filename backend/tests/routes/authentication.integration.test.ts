@@ -550,15 +550,14 @@ describe('Refresh token: hash nel database e revoca delle sessioni', () => {
     expect(nuovo.status).toBe(200);
   });
 
-  it('quando l\'admin imposta una nuova password a un utente, le sue sessioni vengono revocate', async () => {
+  it('quando l\'admin genera una password temporanea per un utente, le sue sessioni vengono revocate', async () => {
     const admin = await loginAsAdmin();
     const collab = await login(testCredentials.collaboratore.username, testCredentials.collaboratore.password);
     expect(collab.status).toBe(200);
 
     const res = await request(app)
-      .put(`/api/utenti/update-utente/${collab.body.utente.id}`)
-      .set('Authorization', `Bearer ${admin.token}`)
-      .send({ ruolo: 'collaboratore', username: testCredentials.collaboratore.username, password: 'passwordNuova1' });
+      .post(`/api/utenti/${collab.body.utente.id}/password-temporanea`)
+      .set('Authorization', `Bearer ${admin.token}`);
     expect(res.status).toBe(200);
 
     const refreshRes = await refresh(getRefreshCookie(collab)!);

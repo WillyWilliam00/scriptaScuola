@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth-store.js';
 import type { AxiosResponse } from 'axios';
-import type { RefreshTokenResponse } from '../../../shared/types.js';
+import { CAMBIO_PASSWORD_OBBLIGATORIO, type RefreshTokenResponse } from '../../../shared/types.js';
 
 /**
  * Istanza Axios configurata con interceptors per gestione token e refresh automatico
@@ -77,8 +77,16 @@ export function refreshAccessToken(): Promise<string> {
  * in quei casi l'utente resta collegato e potrà riprovare.
  */
 export function isSessionExpiredError(error: unknown): boolean {
+  if (isCambioPasswordObbligatorio(error)) return false;
   const status = (error as AxiosError)?.response?.status;
   return status === 401 || status === 403;
+}
+
+/** True se il server ha bloccato la richiesta perché va prima cambiata la password temporanea. */
+export function isCambioPasswordObbligatorio(error: unknown): boolean {
+  const response = (error as AxiosError)?.response;
+  return response?.status === 403
+    && (response.data as { code?: string } | undefined)?.code === CAMBIO_PASSWORD_OBBLIGATORIO;
 }
 
 /**
@@ -119,6 +127,12 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+
+    // Password temporanea ancora da cambiare: ProtectedRoute mostra la pagina del cambio password
+    if (isCambioPasswordObbligatorio(error)) {
+      useAuthStore.getState().setDeveCambiarePassword(true);
+      return Promise.reject(error);
+    }
 
     // Se l'errore non è 401 o la richiesta è già stata ritentata, rifiuta
     if (!originalRequest || error.response?.status !== 401 || originalRequest._retry) {
