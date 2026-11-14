@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -6,11 +6,13 @@ import PublicRoute from "./components/auth/PublicRoute";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthStore } from "./store/auth-store.js";
+import { restoreSession } from "./lib/auth-api.js";
 import Login from "./components/auth/Login.js";
 import LandingPage from "./components/landing/LandingPage.js";
 import { Toaster } from "sonner";
 // Code splitting: le pagine vengono caricate solo quando servono
 const Register = lazy(() => import("./components/auth/Register"));
+const PasswordDimenticata = lazy(() => import("./components/auth/PasswordDimenticata"));
 const RegistraCopie = lazy(() => import("./components/RegistraCopie"));
 const GestioneDocenti = lazy(() => import("./components/gestione-docenti/GestioneDocenti"));
 const GestioneUtenze = lazy(() => import("./components/gestione-utenze/GestioneUtenze"));
@@ -28,6 +30,12 @@ function PageFallback() {
 
 export function App() {
   const isInitializing = useAuthStore((state) => state.isInitializing);
+
+  // All'avvio: se c'era un utente collegato, chiede al server un nuovo access token
+  // (il refresh token è nel cookie httpOnly). Finché non termina resta lo spinner iniziale.
+  useEffect(() => {
+    void restoreSession();
+  }, []);
 
   // QueryClient creato una sola volta per l'intera vita del componente
   const [queryClient] = useState(
@@ -65,6 +73,14 @@ export function App() {
               element={
                 <PublicRoute>
                   <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/password-dimenticata"
+              element={
+                <PublicRoute>
+                  <PasswordDimenticata />
                 </PublicRoute>
               }
             />

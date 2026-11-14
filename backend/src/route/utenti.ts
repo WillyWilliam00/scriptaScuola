@@ -79,11 +79,14 @@ router.post('/new-utente', asyncHandler(async (req: Request, res: Response) => {
     }
 
     const data = createUtenteSchema.parse(req.body);
-    const nuovoUtente = await req.tenantStore.utenti.create(data);
+    // La password la genera la piattaforma: torna una sola volta, qui, da consegnare all'utente
+    const { utente, passwordTemporanea, scadeAt } = await req.tenantStore.utenti.create(data);
     
     res.status(201).json({
         message: 'Utente creato con successo',
-        data: nuovoUtente,
+        data: utente,
+        passwordTemporanea,
+        scadeAt,
     });
 }));
 
@@ -106,6 +109,45 @@ router.put('/update-utente/:id', asyncHandler(async (req: Request, res: Response
         message: 'Utente aggiornato con successo',
         data: utenteAggiornato,
     });
+}));
+
+/**
+ * GET /api/utenti/richieste-reset
+ * Richieste di reset password aperte dei collaboratori dell'istituto (solo admin)
+ */
+router.get('/richieste-reset', asyncHandler(async (req: Request, res: Response) => {
+    if (!req.tenantStore) {
+        return res.status(500).json({ error: 'Store non inizializzato' });
+    }
+    const richieste = await req.tenantStore.utenti.getRichiesteReset();
+    res.status(200).json({ data: richieste });
+}));
+
+/**
+ * POST /api/utenti/richieste-reset/:id/ignora
+ * Chiude una richiesta di reset senza generare una password (solo admin)
+ */
+router.post('/richieste-reset/:id/ignora', asyncHandler(async (req: Request, res: Response) => {
+    if (!req.tenantStore) {
+        return res.status(500).json({ error: 'Store non inizializzato' });
+    }
+    const { id } = uuidParamSchema.parse(req.params);
+    await req.tenantStore.utenti.ignoraRichiestaReset(id, req.user.userId);
+    res.status(200).json({ message: 'Richiesta ignorata', id });
+}));
+
+/**
+ * POST /api/utenti/:id/password-temporanea
+ * Genera una nuova password temporanea per un'utenza dell'istituto (solo admin).
+ * La password torna una sola volta; l'utente dovrà cambiarla al primo accesso.
+ */
+router.post('/:id/password-temporanea', asyncHandler(async (req: Request, res: Response) => {
+    if (!req.tenantStore) {
+        return res.status(500).json({ error: 'Store non inizializzato' });
+    }
+    const { id } = uuidParamSchema.parse(req.params);
+    const { passwordTemporanea, scadeAt } = await req.tenantStore.utenti.generaPasswordTemporanea(id, req.user.userId);
+    res.status(200).json({ passwordTemporanea, scadeAt });
 }));
 
 /**

@@ -1,0 +1,110 @@
+name: CI
+
+# Controlli automatici su ogni PR verso develop o main, e su ogni push a develop e main
+# (così si vede se il branch è ancora verde dopo un merge).
+# Tre job in parallelo, uno per parte del progetto:
+# - frontend: lint (ESLint con React, hook e TanStack Query) e build (TypeScript + Vite)
+# - shared:   test degli schemi di validazione (nessun database)
+# - backend:  controllo dei tipi e test, con un database Postgres temporaneo
+# Gira sui server di GitHub: per un repo pubblico è gratis e non consuma l'abbonamento Claude.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+# Un nuovo push sulla stessa PR annulla il giro precedente ancora in corso.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (lint e build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      # Gli errori bloccano la PR; gli avvisi (warning) compaiono nel log e nella PR ma non la bloccano.
+      - name: Lint
+        run: npm run lint -w frontend
+
+      # "tsc -b && vite build": controlla i tipi e prova a costruire il sito.
+      - name: Build
+        run: npm run build -w frontend
+
+  shared:
+    name: Shared (test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Test
+        run: npm test -w shared
+
+  backend:
+    name: Backend (tipi e test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Database Postgres usa e getta, creato solo per questo giro e poi buttato.
+    # Non usare MAI qui i dati del database reale: i test svuotano le tabelle (TRUNCATE).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: scripta_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:test@localhost:5432/scripta_test
+      DATABASE_URL_TEST: postgres://postgres:test@localhost:5432/scripta_test
+      JWT_SECRET: ci-secret-solo-per-i-test
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Controllo dei tipi
+        run: npx tsc --noEmit
+        working-directory: backend
+
+      # Nel repo non ci sono migrazioni: lo schema si crea direttamente da src/db/schema.ts.
+      - name: Crea le tabelle nel database di test
+        run: npx drizzle-kit push --force
+        working-directory: backend
+
+      # I test di integrazione condividono lo stesso database: i file girano uno alla volta.
+      - name: Test
+        run: npx vitest run --no-file-parallelism
+        working-directory: backend

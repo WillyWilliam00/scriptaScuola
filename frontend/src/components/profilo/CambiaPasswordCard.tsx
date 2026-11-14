@@ -21,7 +21,17 @@ function fieldErrorMessage(error: unknown): string {
   return '';
 }
 
-export default function CambiaPasswordCard() {
+interface CambiaPasswordCardProps {
+  titolo?: string;
+  descrizione?: string;
+  etichettaPasswordAttuale?: string;
+}
+
+export default function CambiaPasswordCard({
+  titolo = 'Cambia password',
+  descrizione = 'Inserisci la password attuale e scegline una nuova di almeno 8 caratteri.',
+  etichettaPasswordAttuale = 'Password attuale',
+}: CambiaPasswordCardProps = {}) {
   const changePasswordMutation = useChangePassword();
 
   const form = useForm({
@@ -48,10 +58,8 @@ export default function CambiaPasswordCard() {
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle className="text-lg">Cambia password</CardTitle>
-        <CardDescription>
-          Inserisci la password attuale e scegline una nuova di almeno 8 caratteri.
-        </CardDescription>
+        <CardTitle className="text-lg">{titolo}</CardTitle>
+        <CardDescription>{descrizione}</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -65,7 +73,7 @@ export default function CambiaPasswordCard() {
           <form.Field name="currentPassword">
             {(field) => (
               <Field>
-                <FieldLabel htmlFor="current-password">Password attuale</FieldLabel>
+                <FieldLabel htmlFor="current-password">{etichettaPasswordAttuale}</FieldLabel>
                 <FieldContent>
                   <Input
                     id="current-password"

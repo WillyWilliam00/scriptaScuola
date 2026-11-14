@@ -71,19 +71,23 @@ Il backend di **ScriptaScuola** espone una serie di **API REST** multi‑tenant 
   - Crea lo `tenantStore` per l’istituto e registra l’admin con ruolo `admin`.
 
 - `POST /api/auth/login`
-  - Login con `identifier` (email o username) e `password`.
+  - Login con `identifier` (email o username) e `password`. Limite: 10 tentativi ogni 15 minuti per IP.
   - Verifica credenziali, genera:
-    - access token JWT (scadenza breve),
-    - refresh token (salvato a DB con scadenza).
-  - Risposta: `token`, `refreshToken`, dati utente (id, email, username, ruolo).
+    - access token JWT (15 minuti), restituito nel corpo e tenuto dal frontend solo in memoria,
+    - refresh token (7 giorni), inviato **solo** in un cookie `httpOnly`, `SameSite=Strict`, `Path=/api/auth`. Nel database ne resta solo l'hash SHA-256.
+  - Risposta: `token`, dati utente (id, email, username, ruolo), dati istituto.
 
 - `POST /api/auth/logout`
-  - Invalida un `refreshToken` marcandolo come `revokedAt`.
+  - Legge il refresh token dal cookie, lo revoca (`revokedAt`) e cancella il cookie. Risponde 200 anche senza cookie.
 
 - `POST /api/auth/refresh`
-  - Riceve un `refreshToken` valido e non scaduto.
-  - Lo invalida e ne genera uno nuovo.
-  - Restituisce un **nuovo access token** e un **nuovo refresh token**.
+  - Legge il refresh token dal cookie (il corpo della richiesta è ignorato).
+  - Lo invalida, ne genera uno nuovo nel cookie e restituisce un **nuovo access token**.
+
+- `POST /api/auth/change-password` (autenticata)
+  - Revoca tutte le sessioni dell'utente e ne apre una nuova (nuovo cookie) per chi ha fatto la richiesta.
+
+Il frontend chiama l'API su `/api` del proprio dominio: Vercel inoltra le richieste a Render (`frontend/vercel.json`), in sviluppo lo fa il proxy di Vite. Così il cookie è di prima parte e i browser non lo scartano.
 
 #### Docenti – `/api/docenti`
 
@@ -208,6 +212,9 @@ Creare un file `.env` in `backend` (o configurare le variabili nel tuo ambiente)
 - `DATABASE_URL`: connection string PostgreSQL (Neon o altro).
 - `JWT_SECRET`: chiave segreta per firmare i JWT.
 - `PORT`: porta HTTP su cui esporre il backend (default 3000).
+- `TRUST_PROXY`: numero di proxy davanti al backend (default 2: Vercel, che inoltra `/api`, più il proxy di Render). Serve al limite dei tentativi su login e registrazione per leggere l'IP reale del client. Dopo un deploy si verifica con `GET /api/health/ip`, che deve mostrare il proprio IP pubblico.
+- `FRONTEND_ORIGIN`: origine del sito in produzione (es. `https://scriptascuola.it`). Le richieste da altre origini ricevono 403.
+- `COOKIE_SECURE`: `false` per disattivare l'attributo Secure del cookie di sessione in locale (serve solo con Safari su http). Di default il cookie è Secure fuori dai test.
 - Eventuali altre variabili richieste dal tuo setup DB.
 
 #### Installazione dipendenze

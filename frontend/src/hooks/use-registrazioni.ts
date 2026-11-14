@@ -1,6 +1,6 @@
 import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
-import type { RegistrazioniCopiePaginatedResponse } from '../../../shared/types.js';
+import type { Registrazione, RegistrazioniCopiePaginatedResponse } from '../../../shared/types.js';
 import type { RegistrazioniCopieQuery, InsertRegistrazione, ModifyRegistrazione } from '../../../shared/validation.js';
 import { toast } from 'sonner';
 import { formatError } from '@/lib/utils.js';
@@ -84,7 +84,7 @@ export function useUpdateRegistrazione() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: ModifyRegistrazione }) => {
-      const response = await api.put<{ message: string; data: any }>(
+      const response = await api.put<{ message: string; data: Registrazione }>(
         `/registrazioni-copie/update-registrazione/${id}`,
         data
       );

@@ -6,6 +6,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Plus } from "@hugeicons/core-free-icons";
 import { UtenteFormFields } from "./UtenteFormFields";
 import { useUtenteForm } from "./utente-form";
+import { useState } from "react";
+import { PasswordTemporaneaDialog, type PasswordTemporaneaInfo } from "./PasswordTemporaneaDialog";
 
 interface NuovoUtenteModalProps {
     typeForm: "view" | "add" | "edit" | "delete" | null;
@@ -15,12 +17,17 @@ interface NuovoUtenteModalProps {
 
 export default function NuovoUtenteModal({ typeForm, onClose, onOpenAddForm }: NuovoUtenteModalProps) {
     const createUtente = useCreateUtente();
+    const [passwordInfo, setPasswordInfo] = useState<PasswordTemporaneaInfo | null>(null);
 
     const form = useUtenteForm({
-        passwordRequired: true,
         onSubmit: (data) => {
             createUtente.mutate(data, {
-                onSuccess: () => {
+                onSuccess: (res) => {
+                    setPasswordInfo({
+                        identificativo: data.ruolo === "admin" ? data.email : data.username,
+                        passwordTemporanea: res.passwordTemporanea,
+                        scadeAt: res.scadeAt,
+                    });
                     onClose();
                     createUtente.reset();
                     form.reset();
@@ -30,6 +37,7 @@ export default function NuovoUtenteModal({ typeForm, onClose, onOpenAddForm }: N
     })
 
     return (
+        <>
         <Dialog
             open={typeForm === "add"}
             onOpenChange={(open) => {
@@ -52,15 +60,13 @@ export default function NuovoUtenteModal({ typeForm, onClose, onOpenAddForm }: N
                         Aggiungi utenza
                     </DialogTitle>
                     <DialogDescription>
-                        Inserisci ruolo, email o username e password.
+                        Inserisci ruolo ed email o username. La password temporanea la genera la piattaforma: te la mostriamo subito dopo.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <UtenteFormFields
                         form={form}
                         ruoloDisabled={false}
-                        passwordLabel="Password"
-                        passwordRequired
                     />
                     {
                         createUtente.isError && createUtente.error && (
@@ -89,5 +95,7 @@ export default function NuovoUtenteModal({ typeForm, onClose, onOpenAddForm }: N
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        <PasswordTemporaneaDialog info={passwordInfo} onClose={() => setPasswordInfo(null)} />
+        </>
     )
 }

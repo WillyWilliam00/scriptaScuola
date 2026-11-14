@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from "@/store/auth-store";
 import type { ReactNode } from 'react';
+import CambioPasswordObbligatorio from './CambioPasswordObbligatorio';
 
 /**
  * Componente ProtectedRoute per proteggere route con autenticazione e ruolo
@@ -24,11 +25,16 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, jwtPayload } = useAuthStore();
+  const { isAuthenticated, jwtPayload, utente } = useAuthStore();
 
   // Se non autenticato, redirect a login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Password temporanea: prima di tutto va scelta una password nuova
+  if (utente?.deveCambiarePassword) {
+    return <CambioPasswordObbligatorio />;
   }
 
   // Se richiesto un ruolo specifico, verifica che corrisponda

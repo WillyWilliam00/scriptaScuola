@@ -6,8 +6,6 @@ import type { UtenteFormApi, UtenteFormValues } from "./utente-form";
 interface UtenteFormFieldsProps {
     form: UtenteFormApi;
     ruoloDisabled: boolean;
-    passwordLabel: string;
-    passwordRequired: boolean;
 }
 
 function FieldErrors({ errors, isTouched }: { errors: unknown[]; isTouched: boolean }) {
@@ -19,8 +17,8 @@ function FieldErrors({ errors, isTouched }: { errors: unknown[]; isTouched: bool
     ));
 }
 
-/** Campi del form utente (ruolo, email/username, password), usati da creazione e modifica. */
-export function UtenteFormFields({ form, ruoloDisabled, passwordLabel, passwordRequired }: UtenteFormFieldsProps) {
+/** Campi del form utente (ruolo, email/username), usati da creazione e modifica. */
+export function UtenteFormFields({ form, ruoloDisabled }: UtenteFormFieldsProps) {
     return (
         <form onSubmit={(e) => {
             e.preventDefault();
@@ -91,24 +89,6 @@ export function UtenteFormFields({ form, ruoloDisabled, passwordLabel, passwordR
                 )}
             </form.Subscribe>
 
-            <form.Field name="password" children={(field) => (
-                <>
-                    <Field className="mt-4">
-                        <FieldLabel htmlFor="password-utente">{passwordLabel}</FieldLabel>
-                        <FieldContent>
-                            <Input
-                                id="password-utente"
-                                type="password"
-                                required={passwordRequired}
-                                placeholder="Minimo 8 caratteri"
-                                value={field.state.value}
-                                onChange={(e) => field.handleChange(e.target.value)}
-                            />
-                        </FieldContent>
-                    </Field>
-                    <FieldErrors errors={field.state.meta.errors} isTouched={field.state.meta.isTouched} />
-                </>
-            )} />
         </form>
     );
 }

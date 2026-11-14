@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { FilterIcon, SearchIcon } from "@hugeicons/core-free-icons";
@@ -31,30 +31,21 @@ export function ServerFiltersBar({
   const [localDocenteCognome, setLocalDocenteCognome] = useState(filterValues.docenteCognome ?? "");
   const [localCopieEffettuate, setLocalCopieEffettuate] = useState(filterValues.copieEffettuate ?? "");
   const [localUtenteIdentifier, setLocalUtenteIdentifier] = useState(filterValues.utenteIdentifier ?? "");
-  useEffect(() => {
-    setLocalNome(filterValues.nome ?? "");
-  }, [filterValues.nome]);
-  useEffect(() => {
-    setLocalCognome(filterValues.cognome ?? "");
-  }, [filterValues.cognome]);
-  useEffect(() => {
-    setLocalIdentifier(filterValues.identifier ?? "");
-  }, [filterValues.identifier]);
-  useEffect(() => {
-    setLocalRuolo(filterValues.ruolo ?? "");
-  }, [filterValues.ruolo]);
-  useEffect(() => {
-    setLocalDocenteNome(filterValues.docenteNome ?? "");
-  }, [filterValues.docenteNome]);
-  useEffect(() => {
-    setLocalDocenteCognome(filterValues.docenteCognome ?? "");
-  }, [filterValues.docenteCognome]);
-  useEffect(() => {
-    setLocalCopieEffettuate(filterValues.copieEffettuate ?? "");
-  }, [filterValues.copieEffettuate]);
-  useEffect(() => {
-    setLocalUtenteIdentifier(filterValues.utenteIdentifier ?? "");
-  }, [filterValues.utenteIdentifier]);
+  // Quando i filtri arrivano cambiati dall'esterno (es. reset o navigazione), riallinea i
+  // campi locali. Si fa durante il render confrontando con i valori precedenti, come
+  // suggerisce React, invece che con un useEffect che causerebbe un render in più.
+  const [prevFilterValues, setPrevFilterValues] = useState(filterValues);
+  if (prevFilterValues !== filterValues) {
+    setPrevFilterValues(filterValues);
+    if (prevFilterValues.nome !== filterValues.nome) setLocalNome(filterValues.nome ?? "");
+    if (prevFilterValues.cognome !== filterValues.cognome) setLocalCognome(filterValues.cognome ?? "");
+    if (prevFilterValues.identifier !== filterValues.identifier) setLocalIdentifier(filterValues.identifier ?? "");
+    if (prevFilterValues.ruolo !== filterValues.ruolo) setLocalRuolo(filterValues.ruolo ?? "");
+    if (prevFilterValues.docenteNome !== filterValues.docenteNome) setLocalDocenteNome(filterValues.docenteNome ?? "");
+    if (prevFilterValues.docenteCognome !== filterValues.docenteCognome) setLocalDocenteCognome(filterValues.docenteCognome ?? "");
+    if (prevFilterValues.copieEffettuate !== filterValues.copieEffettuate) setLocalCopieEffettuate(filterValues.copieEffettuate ?? "");
+    if (prevFilterValues.utenteIdentifier !== filterValues.utenteIdentifier) setLocalUtenteIdentifier(filterValues.utenteIdentifier ?? "");
+  }
 
   const emitFilterChange = useCallback(
     (filters: Record<string, string | undefined>) => {

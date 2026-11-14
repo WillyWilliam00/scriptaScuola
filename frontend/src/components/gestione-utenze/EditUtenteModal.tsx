@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import type { Utente } from "@shared/types";
 import { formatError, utenteDisplayName } from "@/lib/utils";
 import { useUpdateUtente } from "@/hooks/use-utenti";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useGeneraPasswordTemporanea } from "@/hooks/use-richieste-reset";
+import { PasswordTemporaneaDialog, type PasswordTemporaneaInfo } from "./PasswordTemporaneaDialog";
 import { UtenteFormFields } from "./UtenteFormFields";
 import { getUtenteFormValues, emptyUtenteFormValues, useUtenteForm } from "./utente-form";
 
@@ -18,9 +20,23 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
     const isOpen = typeForm === "edit" && selectedUtente !== null;
 
     const updateUtente = useUpdateUtente();
+    const generaPassword = useGeneraPasswordTemporanea();
+    const [passwordInfo, setPasswordInfo] = useState<PasswordTemporaneaInfo | null>(null);
+
+    const handleGeneraPassword = () => {
+        if (!selectedUtente) return;
+        const identificativo = utenteDisplayName(selectedUtente);
+        generaPassword.mutate(selectedUtente.id, {
+            onSuccess: (res) => {
+                setPasswordInfo({ identificativo, ...res });
+                updateUtente.reset();
+                form.reset(emptyUtenteFormValues);
+                onClose();
+            },
+        });
+    };
 
     const form = useUtenteForm({
-        passwordRequired: false,
         onSubmit: (data) => {
             if (!selectedUtente) return;
             updateUtente.mutate({ id: selectedUtente.id, data }, {
@@ -40,6 +56,7 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
     }, [isOpen, selectedUtente, form]);
 
     return (
+        <>
         <Dialog
             open={isOpen}
             onOpenChange={(open) => {
@@ -56,15 +73,29 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
                         Modifica utenza
                     </DialogTitle>
                     <DialogDescription>
-                        Modifica i dati dell’utenza di {selectedUtente ? utenteDisplayName(selectedUtente) : '...'}. La password è opzionale.
+                        Modifica i dati dell’utenza di {selectedUtente ? utenteDisplayName(selectedUtente) : '...'}.
                     </DialogDescription>
                 </DialogHeader>
                 <UtenteFormFields
                     form={form}
                     ruoloDisabled={isAdmin}
-                    passwordLabel="Password (lascia vuoto per non modificare)"
-                    passwordRequired={false}
                 />
+                <div className="rounded-md border p-3 space-y-2">
+                    <p className="text-sm font-medium">Password</p>
+                    <p className="text-xs text-muted-foreground">
+                        Se ha dimenticato la password, generane una temporanea: le sessioni aperte vengono chiuse
+                        e al primo accesso dovrà sceglierne una nuova.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGeneraPassword}
+                        disabled={generaPassword.isPending}
+                    >
+                        {generaPassword.isPending ? "Generazione..." : "Genera password temporanea"}
+                    </Button>
+                </div>
                 {
                     updateUtente.isError && updateUtente.error && (
                         <span className="text-red-500 text-xs">
@@ -94,6 +125,7 @@ export default function EditUtenteModal({ selectedUtente, typeForm, onClose }: E
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-
+        <PasswordTemporaneaDialog info={passwordInfo} onClose={() => setPasswordInfo(null)} />
+        </>
     )
 }

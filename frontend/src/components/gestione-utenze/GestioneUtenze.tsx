@@ -10,6 +10,7 @@ import NuovoUtenteModal from "./NuovoUtenteModal";
 import { ViewUtenteModal } from "./ViewUtenteModal";
 import { DeleteUtenteAlertDialog } from "./DeleteUtenteAlertDialog";
 import EditUtenteModal from "./EditUtenteModal";
+import { RichiesteResetCard } from "./RichiesteResetCard";
 import { Button } from "@/components/ui/button";
 import ErrorBoundary from "../common/ErrorBoundary";
 import ErrorFallback from "../common/ErrorFallback";
@@ -82,7 +83,7 @@ export default function GestioneUtenze() {
 
   const handleExport = useCallback(() => {
     exportUtenti(utentiQuery)
-  }, [utentiQuery])
+  }, [exportUtenti, utentiQuery])
 
   const filterValues = useMemo(
     () => ({ identifier: utentiQuery.identifier }),
@@ -111,6 +112,7 @@ export default function GestioneUtenze() {
           </Button>
           <NuovoUtenteModal typeForm={typeForm} onClose={handleCloseForm} onOpenAddForm={handleOpenAddForm} />
         </div>
+        <RichiesteResetCard />
         <ErrorBoundary
           key={errorBoundaryKey}
           fallback={  
