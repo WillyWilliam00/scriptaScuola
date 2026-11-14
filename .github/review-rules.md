@@ -111,6 +111,8 @@ Un solo commento, in italiano, senza preamboli:
 - ...
 
 _Controllato: elenco breve delle aree guardate. Non controllato: cosa è rimasto fuori e perché._
+
+<!-- stato-review: aperta -->
 ```
 
 - **Bloccante**: bug certo, perdita o esposizione di dati, sicurezza, regressione di una funzione esistente.
@@ -119,3 +121,32 @@ _Controllato: elenco breve delle aree guardate. Non controllato: cosa è rimasto
 - Al massimo sei voci in tutto. Ometti le sezioni vuote.
 - Se non trovi nulla: solo le righe «Esito» e «Controllato».
 - Commenti sulla riga solo per i bloccanti, con lo stesso testo.
+- L'ultima riga è sempre il marcatore nascosto `<!-- stato-review: aperta -->` se c'è almeno un punto bloccante o da verificare, altrimenti `<!-- stato-review: chiusa -->`. I suggerimenti da soli non tengono aperta la review. Il workflow usa questo marcatore per decidere se fare la verifica dopo il prossimo push.
+
+## Verifica delle correzioni
+
+Quando la review precedente ha lasciato punti aperti e arriva un nuovo push o una risposta nei commenti (o qualcuno scrive `/review`), il reviewer non rifà la review da capo: controlla cosa è successo ai punti aperti.
+
+- Per ogni punto bloccante o da verificare della review precedente guarda il codice attuale e le risposte nei commenti (anche quelle sulle righe).
+- **✅ Risolto**: il codice ora è corretto. Una riga che dice come.
+- **💬 Spiegazione accettata**: il codice non è cambiato, ma la risposta dimostra che il punto non era un problema o che è una scelta voluta e documentata. Accettala solo se regge: verifica nel codice quello che la risposta afferma.
+- **❌ Ancora aperto**: la correzione manca, è parziale o la risposta non convince. Spiega cosa manca in concreto.
+- **🆕 Nuovo**: un problema bloccante o da verificare introdotto dalle correzioni stesse. Guarda solo il codice cambiato dalle correzioni, al massimo tre voci. Non riaprire temi che la review precedente non aveva sollevato.
+- I suggerimenti della review precedente non vanno ricontrollati.
+
+Formato, in un commento nuovo (non modificare quello della review):
+
+```
+## Verifica delle correzioni
+
+**Esito:** tutti i punti chiusi | N punti ancora aperti
+
+- ✅ **Titolo del punto.** Come è stato risolto.
+- 💬 **Titolo del punto.** Perché la spiegazione regge.
+- ❌ **Titolo del punto.** Cosa manca ancora.
+- 🆕 **`percorso/file.ts:riga` Titolo.** Cosa si rompe.
+
+<!-- stato-review: chiusa -->
+```
+
+Marcatore finale: `aperta` se resta almeno un ❌ o un 🆕, altrimenti `chiusa`. Dopo tre verifiche automatiche sulla stessa PR il workflow smette di ripartire da solo; resta disponibile `/review`.
