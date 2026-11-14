@@ -5,7 +5,7 @@ import { insertIstitutoSchema, loginSchema, registerSchema, changePasswordSchema
 import { istituti, refreshTokens, richiesteResetPassword, utenti } from '../db/schema.js';
 import { inizioFinestraRichieste } from '../db/utils/passwordTemporanea.js';
 import { db } from '../db/index.js';
-import { and, eq, gt, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../middleware/auth.js';
@@ -74,8 +74,10 @@ router.post('/setup-scuola', authLimiter, asyncHandler(async (req: Request, res:
     // Email di verifica all'admin appena registrato. Se l'invio fallisce la registrazione
     // resta valida: l'email si può chiedere di nuovo dal Profilo.
     if (result.utente.email) {
-        const token = await creaTokenEmail(db, result.utente.id, 'verifica_email', result.utente.email);
-        inviaEmailInBackground(emailVerificaIndirizzo(result.utente.email, token, VERIFICA_EMAIL_ORE));
+        const { id, email } = result.utente;
+        void creaTokenEmail(db, id, 'verifica_email', email)
+            .then((token) => inviaEmailInBackground(emailVerificaIndirizzo(email, token, VERIFICA_EMAIL_ORE)))
+            .catch((err) => console.error('Errore durante la preparazione dell\'email di verifica:', err));
     }
 
     res.status(201).json({
@@ -264,6 +266,21 @@ router.post('/richiesta-reset', richiestaResetLimiter, asyncHandler(async (req: 
 const MESSAGGIO_PASSWORD_DIMENTICATA = 'Se l\'indirizzo appartiene a un amministratore, riceverai un\'email con il link per scegliere una nuova password. Controlla anche la cartella spam.';
 
 /**
+ * Cerca l'admin con quell'email ignorando maiuscole e minuscole (chi si è registrato come
+ * Mario@scuola.it può scrivere mario@scuola.it). Se due account differiscono solo per le
+ * maiuscole si usa solo quello scritto esattamente uguale.
+ */
+async function inviaLinkPasswordDimenticata(email: string): Promise<void> {
+    const trovati = await db.select({ id: utenti.id, email: utenti.email })
+        .from(utenti)
+        .where(and(sql`lower(${utenti.email}) = lower(${email})`, eq(utenti.ruolo, 'admin')));
+    const utente = trovati.length === 1 ? trovati[0] : trovati.find((u) => u.email === email);
+    if (!utente?.email) return;
+    const token = await creaTokenEmail(db, utente.id, 'reset_password', utente.email);
+    inviaEmailInBackground(emailReimpostaPassword(utente.email, token, RESET_PASSWORD_MINUTI));
+}
+
+/**
  * POST /api/auth/password-dimenticata
  * Un admin che ha dimenticato la password riceve via email un link monouso (valido 60 minuti).
  * Risponde sempre allo stesso modo, anche se l'email non esiste o è di un collaboratore,
@@ -272,16 +289,12 @@ const MESSAGGIO_PASSWORD_DIMENTICATA = 'Se l\'indirizzo appartiene a un amminist
 router.post('/password-dimenticata', passwordDimenticataLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { email } = passwordDimenticataSchema.parse(req.body);
 
-    const [utente] = await db.select({ id: utenti.id, email: utenti.email })
-        .from(utenti)
-        .where(and(eq(utenti.email, email), eq(utenti.ruolo, 'admin')));
-
-    if (utente?.email) {
-        const token = await creaTokenEmail(db, utente.id, 'reset_password', utente.email);
-        inviaEmailInBackground(emailReimpostaPassword(utente.email, token, RESET_PASSWORD_MINUTI));
-    }
-
+    // Si risponde subito e tutto il resto avviene dopo, così i tempi sono uguali per tutti.
     res.status(200).json({ message: MESSAGGIO_PASSWORD_DIMENTICATA });
+
+    void inviaLinkPasswordDimenticata(email).catch((err) => {
+        console.error('Errore durante la richiesta di password dimenticata:', err);
+    });
 }));
 
 /**

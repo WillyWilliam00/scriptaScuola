@@ -172,6 +172,14 @@ describe('Email: verifica e recupero password degli admin', () => {
       expect(emailInviate).toHaveLength(0);
     });
 
+    it('trova l\'admin anche se l\'email è scritta con maiuscole diverse', async () => {
+      const res = await request(app).post('/api/auth/password-dimenticata').send({ email: testCredentials.admin.email.toUpperCase() });
+      expect(res.status).toBe(200);
+      await attendiEmail();
+      expect(emailInviate).toHaveLength(1);
+      expect(emailInviate[0]!.a).toBe(testCredentials.admin.email);
+    });
+
     it('vale solo l\'ultimo link chiesto', async () => {
       await request(app).post('/api/auth/password-dimenticata').send({ email: testCredentials.admin.email });
       await attendiEmail(1);

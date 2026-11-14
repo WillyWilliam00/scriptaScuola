@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,22 +15,19 @@ import type { LoginResponse } from "@shared/types";
  */
 export default function StatoEmailAdmin() {
   const utente = useAuthStore((s) => s.utente);
-  const setUser = useAuthStore((s) => s.setUser);
   const [inviata, setInviata] = useState(false);
 
   const { data: me } = useQuery({
     queryKey: ["auth", "me"],
-    queryFn: async () => (await api.get<LoginResponse["utente"]>("/auth/me")).data,
+    queryFn: async () => {
+      const dati = (await api.get<LoginResponse["utente"]>("/auth/me")).data;
+      // Tiene allineato anche lo store, che altre pagine leggono.
+      const { utente: attuale, setUser } = useAuthStore.getState();
+      if (attuale) setUser({ ...attuale, emailVerificata: dati.emailVerificata, haPassword: dati.haPassword });
+      return dati;
+    },
     refetchOnWindowFocus: true,
   });
-
-  useEffect(() => {
-    if (!me) return;
-    const attuale = useAuthStore.getState().utente;
-    if (attuale && (attuale.emailVerificata !== me.emailVerificata || attuale.haPassword !== me.haPassword)) {
-      setUser({ ...attuale, emailVerificata: me.emailVerificata, haPassword: me.haPassword });
-    }
-  }, [me, setUser]);
 
   const invia = useMutation({
     mutationFn: async () => (await api.post<{ message: string }>("/auth/invia-verifica-email")).data,
