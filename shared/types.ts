@@ -128,6 +128,10 @@ export interface LoginResponse {
     ruolo: 'admin' | 'collaboratore';
     /** true se l'utente sta usando una password temporanea e deve cambiarla prima di continuare */
     deveCambiarePassword: boolean;
+    /** true se l'utente ha confermato l'email dal link ricevuto (sempre false per chi non ha email) */
+    emailVerificata: boolean;
+    /** true se l'utente ha una password (dalla fase Google potrà accedere solo con un provider esterno) */
+    haPassword: boolean;
   };
   istituto: {
     id: number;

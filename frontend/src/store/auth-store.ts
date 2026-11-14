@@ -30,6 +30,10 @@ interface AuthState {
     ruolo: 'admin' | 'collaboratore';
     // true finché l'utente usa una password temporanea (va cambiata prima di continuare)
     deveCambiarePassword?: boolean;
+    // true se l'admin ha confermato l'email (serve per recuperare la password via email)
+    emailVerificata?: boolean;
+    // false per chi accede solo con Google/Microsoft (fase 3 in poi)
+    haPassword?: boolean;
   } | null;
   
   // Dati istituto (da LoginResponse)

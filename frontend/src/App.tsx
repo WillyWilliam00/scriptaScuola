@@ -13,6 +13,8 @@ import { Toaster } from "sonner";
 // Code splitting: le pagine vengono caricate solo quando servono
 const Register = lazy(() => import("./components/auth/Register"));
 const PasswordDimenticata = lazy(() => import("./components/auth/PasswordDimenticata"));
+const ReimpostaPassword = lazy(() => import("./components/auth/ReimpostaPassword"));
+const VerificaEmail = lazy(() => import("./components/auth/VerificaEmail"));
 const RegistraCopie = lazy(() => import("./components/RegistraCopie"));
 const GestioneDocenti = lazy(() => import("./components/gestione-docenti/GestioneDocenti"));
 const GestioneUtenze = lazy(() => import("./components/gestione-utenze/GestioneUtenze"));
@@ -84,6 +86,9 @@ export function App() {
                 </PublicRoute>
               }
             />
+            {/* Link ricevuti via email: accessibili anche da connessi */}
+            <Route path="/reimposta-password" element={<ReimpostaPassword />} />
+            <Route path="/verifica-email" element={<VerificaEmail />} />
             <Route
               path="/register"
               element={
