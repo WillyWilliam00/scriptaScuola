@@ -100,3 +100,8 @@ npm run dev
 - [`frontend/README.md`](frontend/README.md): documentazione dell’interfaccia ScriptaScuola, struttura delle pagine e integrazione con le API.
 
 
+- [`docs/agents/`](docs/agents/): struttura, comandi, convenzioni e regole di lavoro (pensate per Claude Code ma valide per tutti). Punto di ingresso: [`CLAUDE.md`](CLAUDE.md).
+
+### Flusso di lavoro
+
+I branch di lavoro partono da `develop` e tornano in `develop` con una pull request, che si unisce con la CI verde. I rilasci portano `develop` in `main` (produzione) con una PR di rilascio. Dettagli in [`docs/agents/flusso-git-e-issue.md`](docs/agents/flusso-git-e-issue.md).
