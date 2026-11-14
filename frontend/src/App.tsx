@@ -18,6 +18,14 @@ const VisualizzaRegistrazioni = lazy(() => import("./components/visualizza-regis
 const ProfiloUtente = lazy(() => import("./components/profilo/ProfiloUtente"));
 const NotFound = lazy(() => import("./components/common/NotFound"));
 
+function PageFallback() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
 export function App() {
   const isInitializing = useAuthStore((state) => state.isInitializing);
 
@@ -43,12 +51,6 @@ export function App() {
       </div>
     );
   }
-
-  const PageFallback = () => (
-    <div className="min-h-[50vh] flex items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-    </div>
-  );
 
   return (
     <ErrorBoundary>
