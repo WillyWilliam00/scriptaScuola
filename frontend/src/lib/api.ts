@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth-store.js';
 import type { AxiosResponse } from 'axios';
-import type { RefreshTokenResponse } from '../../../shared/types.js';
+import { CAMBIO_PASSWORD_OBBLIGATORIO, type RefreshTokenResponse } from '../../../shared/types.js';
 
 /**
  * Istanza Axios configurata con interceptors per gestione token e refresh automatico
@@ -14,29 +14,20 @@ import type { RefreshTokenResponse } from '../../../shared/types.js';
  */
 
 
+/**
+ * Indirizzo base dell'API.
+ *
+ * - In produzione è sempre `/api` sullo stesso dominio del sito: Vercel inoltra le chiamate
+ *   al backend (vedi la rewrite in vercel.json). Così il cookie di sessione è del nostro dominio
+ *   e i browser non lo scartano come cookie di terze parti.
+ * - In sviluppo è `/api` attraverso il proxy di Vite (vedi vite.config.ts), oppure il valore
+ *   di VITE_API_BASE_URL se si vuole puntare a un altro backend.
+ */
 function getBaseUrl(): string {
-  // Se è specificata una variabile d'ambiente, usala (ha priorità)
-    if(import.meta.env.VITE_API_BASE_URL) {
-      return import.meta.env.VITE_API_BASE_URL;
-    }
-
-  // Rileva l'hostname corrente (window.location.hostname)
-  // Se siamo su localhost o 127.0.0.1, usa localhost
-  // Altrimenti usa l'IP corrente (es. 192.168.1.53)
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-    
-    if (isLocalhost) {
-      return 'http://localhost:3001/api';
-    } else {
-      // Usa l'IP corrente con la porta del backend
-      return `http://${hostname}:3001/api`;
-    }
+  if (import.meta.env.DEV && import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
   }
-
-  // Fallback per SSR o ambienti senza window
-  return 'http://localhost:3001/api';
+  return '/api';
 }
 
 const BASE_URL = getBaseUrl();
@@ -44,32 +35,59 @@ const BASE_URL = getBaseUrl();
 // Creiamo l'istanza Axios
 export const api = axios.create({
   baseURL: BASE_URL,
+  // Invia e riceve i cookie anche quando in sviluppo l'API è su un'altra origine
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Flag per evitare loop infiniti durante il refresh
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value?: unknown) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
+// Rotte che non devono mai far partire un rinnovo della sessione:
+// un 401 qui significa "credenziali sbagliate" o "sessione finita", non "access token scaduto".
+const ROTTE_SENZA_RINNOVO = ['/auth/login', '/auth/setup-scuola', '/auth/refresh', '/auth/logout'];
+
+// Rinnovo in corso: tutte le richieste che lo aspettano condividono la stessa promessa,
+// così il refresh parte una volta sola anche se falliscono più richieste insieme.
+let refreshPromise: Promise<string> | null = null;
 
 /**
- * Processa la coda di richieste fallite dopo il refresh
+ * Chiede al server un nuovo access token.
+ *
+ * Il refresh token non viene inviato dal codice: sta nel cookie httpOnly e lo allega il browser.
+ * Il server risponde con un nuovo access token e ruota il cookie.
  */
-const processQueue = (error: AxiosError | null, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
+export function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post<RefreshTokenResponse>(`${BASE_URL}/auth/refresh`, undefined, { withCredentials: true })
+      .then((response) => {
+        useAuthStore.getState().setToken(response.data.token);
+        return response.data.token;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
 
-  failedQueue = [];
-};
+/**
+ * True se il rinnovo è fallito perché la sessione non è più valida (cookie assente, scaduto o revocato).
+ * Errori di rete, timeout ed errori del server (5xx, backend che si sta riavviando) NON contano:
+ * in quei casi l'utente resta collegato e potrà riprovare.
+ */
+export function isSessionExpiredError(error: unknown): boolean {
+  if (isCambioPasswordObbligatorio(error)) return false;
+  const status = (error as AxiosError)?.response?.status;
+  return status === 401 || status === 403;
+}
+
+/** True se il server ha bloccato la richiesta perché va prima cambiata la password temporanea. */
+export function isCambioPasswordObbligatorio(error: unknown): boolean {
+  const response = (error as AxiosError)?.response;
+  return response?.status === 403
+    && (response.data as { code?: string } | undefined)?.code === CAMBIO_PASSWORD_OBBLIGATORIO;
+}
 
 /**
  * Request Interceptor: aggiunge il token di autenticazione a ogni richiesta
@@ -94,13 +112,13 @@ api.interceptors.request.use(
 )
 
 /**
- * Response Interceptor: gestisce errori 401 e refresh token automatico
+ * Response Interceptor: gestisce errori 401 e rinnovo automatico della sessione
  * 
  * Spiegazione:
  * - Viene eseguito DOPO ogni risposta HTTP
- * - Se riceve 401 (token scaduto), tenta automaticamente il refresh
- * - Se refresh ha successo, ripete la richiesta originale con il nuovo token
- * - Se refresh fallisce, fa logout e redirect a login
+ * - Se riceve 401 (access token scaduto o assente dopo un ricaricamento), chiede un nuovo token
+ * - Se il rinnovo ha successo, ripete la richiesta originale con il nuovo token
+ * - Se la sessione non è più valida, fa logout e redirect a login
  * - Evita che l'utente debba rifare login quando l'access token scade (15 minuti)
  */
 api.interceptors.response.use(
@@ -108,18 +126,27 @@ api.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-    // Se l'errore non è 401 o la richiesta è già stata ritentata, rifiuta
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    // Password temporanea ancora da cambiare: ProtectedRoute mostra la pagina del cambio password
+    if (isCambioPasswordObbligatorio(error)) {
+      useAuthStore.getState().setDeveCambiarePassword(true);
       return Promise.reject(error);
     }
 
-    // Richieste senza token (es. login, register): il 401 è "credenziali sbagliate",
-    // non "token scaduto". Reject subito senza refresh né coda, così il catch nel form viene chiamato.
-    const authHeader = originalRequest.headers?.Authorization;
-    const hasAuth = typeof authHeader === 'string' && authHeader.startsWith('Bearer ');
-    if (!hasAuth) {
+    // Se l'errore non è 401 o la richiesta è già stata ritentata, rifiuta
+    if (!originalRequest || error.response?.status !== 401 || originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    // Login, registrazione, refresh e logout: il 401 va restituito al chiamante così com'è
+    const url = originalRequest.url ?? '';
+    if (ROTTE_SENZA_RINNOVO.some((rotta) => url.includes(rotta))) {
+      return Promise.reject(error);
+    }
+
+    // Senza un utente collegato non c'è nessuna sessione da rinnovare
+    if (!useAuthStore.getState().isAuthenticated) {
       return Promise.reject(error);
     }
 
@@ -139,54 +166,11 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Se stiamo già facendo refresh, mettiamo la richiesta in coda
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      })
-        .then((token) => {
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-          }
-          return api(originalRequest);
-        })
-        .catch((err) => {
-          return Promise.reject(err);
-        });
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
-
-    const refreshToken = useAuthStore.getState().refreshToken;
-
-    if (!refreshToken) {
-      // Nessun refresh token disponibile, logout e non tentare refresh
-      isRefreshing = false;
-      useAuthStore.getState().logout();
-      processQueue(error, null);
-      return Promise.reject(error);
-    }
 
     try {
-      // Chiama l'endpoint di refresh
-      const response = await axios.post<RefreshTokenResponse>(
-        `${BASE_URL}/auth/refresh`,
-        { refreshToken },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-
-      const { token: newToken, refreshToken: newRefreshToken } = response.data;
-
-      // Aggiorna i token nello store
-      if(newRefreshToken) {
-        useAuthStore.getState().setTokens(newToken, newRefreshToken);
-      } else {
-        useAuthStore.getState().setTokens(newToken, refreshToken);
-      }
-
-      // Processa la coda con successo
-      processQueue(null, newToken);
+      // Se un rinnovo è già in corso, questa richiesta aspetta lo stesso risultato
+      const newToken = await refreshAccessToken();
 
       // Ripeti la richiesta originale con il nuovo token
       if (originalRequest.headers) {
@@ -195,34 +179,15 @@ api.interceptors.response.use(
 
       return api(originalRequest);
     } catch (refreshError) {
-      // Distinguiamo errori di rete da errori di autenticazione
-      const axiosError = refreshError as AxiosError;
-      const isNetworkError = 
-        !axiosError.response || // Nessuna risposta = errore di rete
-        axiosError.code === 'ECONNABORTED' || // Timeout
-        axiosError.code === 'ERR_NETWORK' || // Network error
-        axiosError.message?.includes('Network Error') ||
-        axiosError.message?.includes('timeout') ||
-        axiosError.message?.includes('ECONNREFUSED');
-
-      // Se è un errore di rete temporaneo, NON fare logout
-      // L'utente potrebbe avere token validi ma problemi di connessione
-      // Processiamo la coda con errore ma manteniamo lo stato corrente
-      if (isNetworkError) {
-        console.warn('Refresh token fallito per errore di rete, mantengo stato corrente:', refreshError);
-        processQueue(axiosError, null);
-        isRefreshing = false;
-        // Rifiutiamo la richiesta originale (l'utente può riprovare quando la connessione torna)
+      // Rete assente, timeout o backend non raggiungibile: NON fare logout.
+      // L'utente potrebbe avere una sessione valida ma problemi di connessione: può riprovare.
+      if (!isSessionExpiredError(refreshError)) {
+        console.warn('Rinnovo della sessione non riuscito, mantengo lo stato corrente:', refreshError);
         return Promise.reject(refreshError);
       }
 
-      // Se è un errore di autenticazione (401, 403, refresh token scaduto/revocato), fai logout
-      // Questo può succedere se:
-      // - Il refresh token è scaduto o revocato
-      // - L'utente è stato eliminato dal database
-      // - Il refresh token è invalido
-      console.error('Refresh token fallito per errore di autenticazione:', refreshError);
-      processQueue(axiosError, null);
+      // Sessione non più valida (cookie scaduto o revocato, utente eliminato): logout
+      console.error('Sessione scaduta o revocata:', refreshError);
       useAuthStore.getState().logout();
       
       // Redirect a login se siamo in un contesto browser
@@ -231,8 +196,6 @@ api.interceptors.response.use(
       }
 
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   }
 );

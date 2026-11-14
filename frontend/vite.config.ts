@@ -26,5 +26,14 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
+    // In sviluppo le chiamate a /api passano dal server di Vite verso il backend locale,
+    // come in produzione passano da Vercel verso Render: il browser vede un solo dominio
+    // e il cookie di sessione funziona allo stesso modo.
+    proxy: {
+      "/api": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:3001",
+        changeOrigin: false,
+      },
+    },
   },
 })

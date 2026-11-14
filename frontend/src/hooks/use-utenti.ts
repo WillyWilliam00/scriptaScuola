@@ -1,6 +1,6 @@
 import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
-import type { UtentiPaginatedResponse, Utente } from '../../../shared/types.js';
+import type { UtentiPaginatedResponse, Utente, CreaUtenteResponse } from '../../../shared/types.js';
 import type { UtentiQuery, CreateUtente, ModifyUtente } from '../../../shared/validation.js';
 import { toast } from 'sonner';
 import { formatError } from '@/lib/utils.js';
@@ -55,7 +55,7 @@ export function useCreateUtente() {
 
   return useMutation({
     mutationFn: async (data: CreateUtente) => {
-      const response = await api.post<{ message: string; data: Utente }>(
+      const response = await api.post<CreaUtenteResponse>(
         '/utenti/new-utente',
         data
       );

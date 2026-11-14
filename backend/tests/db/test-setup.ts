@@ -29,6 +29,7 @@ export async function cleanTestDb() {
   await testDb.execute(sql`
     TRUNCATE TABLE 
       refresh_tokens,
+      richieste_reset_password,
       registrazioni_copie,
       docenti,
       utenti,

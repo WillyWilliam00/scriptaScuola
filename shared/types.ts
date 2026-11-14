@@ -121,12 +121,13 @@ export interface JwtPayload {
 // --- Risposta login API ---
 export interface LoginResponse {
   token: string;
-  refreshToken: string;
   utente: {
     id: string;
     email: string | null;
     username: string | null;
     ruolo: 'admin' | 'collaboratore';
+    /** true se l'utente sta usando una password temporanea e deve cambiarla prima di continuare */
+    deveCambiarePassword: boolean;
   };
   istituto: {
     id: number;
@@ -137,10 +138,38 @@ export interface LoginResponse {
 
 export interface RefreshTokenResponse {
   token: string;
-  refreshToken?: string; //per rotazione token
 }
 
 
 export interface DocentiPaginatedResponse extends PaginationResponse<DocenteConRegistrazioni> {}
 export interface UtentiPaginatedResponse extends PaginationResponse<Utente> {}
 export interface RegistrazioniCopiePaginatedResponse extends PaginationResponse<RegistrazioneConDettagli> {}
+
+// --- Reset password dei collaboratori ---
+
+/** Richiesta aperta di reset password, mostrata agli admin in Gestione utenze. */
+export interface RichiestaResetPassword {
+  id: string;
+  utenteId: string;
+  username: string | null;
+  email: string | null;
+  ruolo: 'admin' | 'collaboratore';
+  nota: string | null;
+  createdAt: string;
+}
+
+/** Password temporanea generata dalla piattaforma: viene mostrata una sola volta all'admin. */
+export interface PasswordTemporaneaResponse {
+  passwordTemporanea: string;
+  /** Scadenza in formato ISO */
+  scadeAt: string;
+}
+
+/** Risposta alla creazione di un'utenza: l'utente e la sua password temporanea. */
+export interface CreaUtenteResponse extends PasswordTemporaneaResponse {
+  message: string;
+  data: Utente;
+}
+
+/** Codice d'errore restituito quando l'utente deve prima cambiare la password temporanea. */
+export const CAMBIO_PASSWORD_OBBLIGATORIO = 'CAMBIO_PASSWORD_OBBLIGATORIO';
