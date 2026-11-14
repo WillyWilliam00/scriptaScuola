@@ -72,8 +72,12 @@ router.post('/new-registrazione', asyncHandler(async (req: Request, res: Respons
     if(!req.tenantStore) {
         return res.status(500).json({ error: 'Store non inizializzato' });
     }
-    const data = insertRegistrazioneSchema.parse(req.body);
-    const result: InsertRegistrazione = await req.tenantStore.registrazioniCopie.create(data);
+    if(!req.user) {
+        return res.status(401).json({ error: 'Utente non autenticato' });
+    }
+    // L'autore della registrazione è sempre l'utente del token: un eventuale utenteId nel body viene ignorato
+    const data = insertRegistrazioneSchema.omit({ utenteId: true }).parse(req.body);
+    const result: InsertRegistrazione = await req.tenantStore.registrazioniCopie.create({ ...data, utenteId: req.user.userId });
     res.status(201).json(result);
 }))
 
