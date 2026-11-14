@@ -14,11 +14,12 @@ on:
     branches: [develop, main]
   workflow_dispatch:
 
-# Un nuovo push sulla stessa PR annulla il giro precedente ancora in corso.
-# Su develop e main invece ogni commit completa il suo giro (storico completo).
+# Sulle PR un nuovo push annulla il giro precedente ancora in corso (gruppo = numero della PR).
+# Sui push a develop e main ogni commit ha un gruppo tutto suo (lo SHA), quindi nessun giro
+# viene annullato né scartato dalla coda, anche con push ravvicinati.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
