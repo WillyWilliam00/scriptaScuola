@@ -3,7 +3,7 @@ name: CI
 # Controlli automatici su ogni PR verso develop o main, e su ogni push a develop e main
 # (così si vede se il branch è ancora verde dopo un merge).
 # Tre job in parallelo, uno per parte del progetto:
-# - frontend: lint (ESLint con React, hook e TanStack Query) e build (TypeScript + Vite)
+# - frontend: lint (ESLint con React, hook e TanStack Query), test (Vitest + jsdom + MSW) e build (TypeScript + Vite)
 # - shared:   test degli schemi di validazione (nessun database)
 # - backend:  controllo dei tipi e test, con un database Postgres temporaneo
 # Gira sui server di GitHub: per un repo pubblico è gratis e non consuma l'abbonamento Claude.
@@ -42,6 +42,10 @@ jobs:
       # Gli errori bloccano la PR; gli avvisi (warning) compaiono nel log e nella PR ma non la bloccano.
       - name: Lint
         run: npm run lint -w frontend
+
+      # Vitest in un browser simulato (jsdom); la rete è finta (MSW), nessun backend necessario.
+      - name: Test
+        run: npm test -w frontend
 
       # "tsc -b && vite build": controlla i tipi e prova a costruire il sito.
       - name: Build
