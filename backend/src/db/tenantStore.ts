@@ -189,32 +189,49 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                     .returning({ id: docenti.id });
                 return eliminati.length;
             },
-            checkLimiteCopie: async(docenteId: number, nuoveCopie: number, tx?: typeof db) => {
-                const dbInstance = tx || db;
-                const [stats] = await dbInstance
-                .select({
-                    limite: docenti.limiteCopie,
-                    copieEffettuate: sql<number>`COALESCE(SUM(${registrazioniCopie.copieEffettuate}), 0)::int`
-                })
-                .from(docenti)
-                .leftJoin(registrazioniCopie, and(eq(docenti.id, registrazioniCopie.docenteId), eq(registrazioniCopie.istitutoId, istitutoId)))
-                .where(
-                    and(
-                        eq(docenti.id, docenteId),
-                        eq(docenti.istitutoId, istitutoId),
-                    )
-                ).groupBy(docenti.id)
-                if(!stats) {
+            /**
+             * Verifica che il docente possa fare `nuoveCopie` copie senza superare il limite.
+             * Va chiamata dentro una transazione: blocca la riga del docente (FOR UPDATE)
+             * prima di leggere la somma, così due registrazioni simultanee sullo stesso
+             * docente si mettono in fila invece di leggere entrambe la stessa somma.
+             * Con `escludiRegistrazioneId` la somma ignora la registrazione che si sta modificando.
+             * Restituisce il docente bloccato.
+             */
+            checkLimiteCopie: async(
+                docenteId: number,
+                nuoveCopie: number,
+                tx: typeof db,
+                escludiRegistrazioneId?: number,
+            ) => {
+                const [docente] = await tx.select()
+                    .from(docenti)
+                    .where(and(eq(docenti.id, docenteId), eq(docenti.istitutoId, istitutoId)))
+                    .for('update');
+                if(!docente) {
                     const error = new Error('Docente non trovato') as ErrorWithStatus;
                     error.status = 404;
                     throw error;
                 }
-                if (wouldExceedLimit(stats.copieEffettuate, nuoveCopie, stats.limite)) {
-                    const error = new Error('Limite di copie superato') as ErrorWithStatus;
+                const condizioni = [
+                    eq(registrazioniCopie.docenteId, docenteId),
+                    eq(registrazioniCopie.istitutoId, istitutoId),
+                ];
+                if (escludiRegistrazioneId !== undefined) {
+                    condizioni.push(ne(registrazioniCopie.id, escludiRegistrazioneId));
+                }
+                const [somma] = await tx.select({
+                    totale: sql<number>`COALESCE(SUM(${registrazioniCopie.copieEffettuate}), 0)::int`
+                })
+                .from(registrazioniCopie)
+                .where(and(...condizioni));
+                const totale = somma?.totale ?? 0;
+
+                if (wouldExceedLimit(totale, nuoveCopie, docente.limiteCopie)) {
+                    const error = new Error(`Limite di copie superato. Il docente ha un limite di ${docente.limiteCopie} copie e ne ha già utilizzate ${totale}. Le nuove copie (${nuoveCopie}) porterebbero il totale a ${totale + nuoveCopie}.`) as ErrorWithStatus;
                     error.status = 400;
                     throw error;
                 }
-                return true;
+                return docente;
             },
             bulkImportDocenti: async(data: BulkImportDocenti) => {
                 const validateData = bulkImportDocentiSchema.parse(data);
@@ -674,20 +691,15 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
             create: async(data: Omit<InsertRegistrazione, 'istitutoId'>) => {
                 const validateData = insertRegistrazioneSchema.parse(data);
                 const result = await db.transaction(async (tx: any) => {
-                    const [docente] = await tx.select().from(docenti).where(and(eq(docenti.id, validateData.docenteId), eq(docenti.istitutoId, istitutoId)));
                     const [utente] = await tx.select().from(utenti).where(and(eq(utenti.id, validateData.utenteId), eq(utenti.istitutoId, istitutoId)));
-                    if(!docente) {
-                        const error = new Error('Docente non trovato') as ErrorWithStatus;
-                        error.status = 404;
-                        throw error;
-                    }
                     if(!utente) {
                         const error = new Error('Utente non trovato') as ErrorWithStatus;
                         error.status = 404;
                         throw error;
                     }
+                    // Blocca il docente e verifica il limite (404 se il docente non esiste)
                     await docentiStore.checkLimiteCopie(validateData.docenteId, validateData.copieEffettuate, tx);
-                    
+
                     const [registrazione] = await tx.insert(registrazioniCopie).values({
                         docenteId: validateData.docenteId,
                         copieEffettuate: validateData.copieEffettuate,
@@ -717,38 +729,13 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                         throw error;
                     }
 
-                    // Ottieni il docente per verificare il limite
-                    const [docente] = await tx.select()
-                        .from(docenti)
-                        .where(and(
-                            eq(docenti.id, registrazioneEsistente.docenteId),
-                            eq(docenti.istitutoId, istitutoId)
-                        ));
-
-                    if(!docente) {
-                        const error = new Error('Docente non trovato') as ErrorWithStatus;
-                        error.status = 404;
-                        throw error;
-                    }
-
-                    // Calcola le copie totali del docente escludendo questa registrazione
-                    const [totaleCopie] = await tx.select({
-                        totale: sql<number>`COALESCE(SUM(${registrazioniCopie.copieEffettuate}), 0)::int`
-                    })
-                    .from(registrazioniCopie)
-                    .where(and(
-                        eq(registrazioniCopie.docenteId, docente.id),
-                        eq(registrazioniCopie.istitutoId, istitutoId),
-                    ));
-
-                    const nuoveCopieTotali = totaleCopie + validateData.copieEffettuate;
-
-                    // Verifica che non superi il limite
-                    if(nuoveCopieTotali > docente.limiteCopie) {
-                        const error = new Error(`Limite di copie superato. Il docente ha un limite di ${docente.limiteCopie} copie e ne ha già utilizzate ${totaleCopie}. Le nuove copie (${validateData.copieEffettuate}) porterebbero il totale a ${nuoveCopieTotali}.`) as ErrorWithStatus;
-                        error.status = 400;
-                        throw error;
-                    }
+                    // Blocca il docente e verifica il limite senza contare questa registrazione
+                    await docentiStore.checkLimiteCopie(
+                        registrazioneEsistente.docenteId,
+                        validateData.copieEffettuate,
+                        tx,
+                        id,
+                    );
 
                     // Aggiorna la registrazione
                     const [registrazioneAggiornata] = await tx.update(registrazioniCopie)

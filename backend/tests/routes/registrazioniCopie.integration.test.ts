@@ -4,6 +4,35 @@ import { app } from '../../src/index.js';
 import { cleanTestDb } from '../db/test-setup.js';
 import { seedTestData } from '../db/test-seed.js';
 import { loginAsAdmin, loginAsCollaboratore } from '../utils/test-helpers.js';
+import { testDb } from '../db/test-setup.js';
+import { docenti, istituti } from '../../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+
+/** Crea un docente nell'istituto di test con il limite indicato, per test indipendenti dai dati del seed. */
+async function creaDocente(limiteCopie: number) {
+  const [istituto] = await testDb.select().from(istituti).where(eq(istituti.codiceIstituto, 'TEST123456'));
+  const [docente] = await testDb.insert(docenti).values({
+    nome: 'Limite',
+    cognome: `Test${Math.random().toString(36).slice(2, 8)}`,
+    limiteCopie,
+    istitutoId: istituto!.id,
+  }).returning();
+  return docente!;
+}
+
+async function registra(token: string, docenteId: number, copieEffettuate: number) {
+  return request(app)
+    .post('/api/registrazioni-copie/new-registrazione')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ docenteId, copieEffettuate });
+}
+
+async function modifica(token: string, id: number, copieEffettuate: number) {
+  return request(app)
+    .put(`/api/registrazioni-copie/update-registrazione/${id}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ copieEffettuate });
+}
 
 describe('Rotte /api/registrazioni-copie', () => {
   beforeAll(async () => {
@@ -144,5 +173,74 @@ describe('Rotte /api/registrazioni-copie', () => {
     expect(deleteRes.body).toHaveProperty('id');
     expect(deleteRes.body.id).toBe(registrazioneId);
   });
-});
 
+  describe('attribuzione della registrazione (#25)', () => {
+    it("salva sempre l'utente del token, anche se il body indica un altro utenteId", async () => {
+      const { token: collaboratoreToken, utente: collaboratore } = await loginAsCollaboratore();
+      const { utente: admin } = await loginAsAdmin();
+      const docente = await creaDocente(100);
+
+      const res = await request(app)
+        .post('/api/registrazioni-copie/new-registrazione')
+        .set('Authorization', `Bearer ${collaboratoreToken}`)
+        .send({ docenteId: docente.id, copieEffettuate: 5, utenteId: admin.id });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty('utenteId', collaboratore.id);
+    });
+
+    it('accetta una registrazione senza utenteId nel body', async () => {
+      const { token, utente } = await loginAsCollaboratore();
+      const docente = await creaDocente(100);
+
+      const res = await registra(token, docente.id, 5);
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty('utenteId', utente.id);
+    });
+  });
+
+  describe('limite copie in modifica (#21)', () => {
+    it('rifiuta la modifica che supera il limite e accetta quelle che restano nel limite', async () => {
+      const { token } = await loginAsAdmin();
+      const docente = await creaDocente(10);
+      const a = await registra(token, docente.id, 6);
+      const b = await registra(token, docente.id, 3);
+      expect(a.status).toBe(201);
+      expect(b.status).toBe(201);
+
+      // 6 + 5 = 11 > 10
+      const oltre = await modifica(token, b.body.id, 5);
+      expect(oltre.status).toBe(400);
+      expect(oltre.body.error).toContain('ne ha già utilizzate 6');
+
+      // 6 + 4 = 10: nel limite (la registrazione modificata non viene contata due volte)
+      const alLimite = await modifica(token, b.body.id, 4);
+      expect(alLimite.status).toBe(200);
+      expect(alLimite.body.data).toHaveProperty('copieEffettuate', 4);
+
+      // Riduzione: sempre accettata
+      const riduzione = await modifica(token, a.body.id, 1);
+      expect(riduzione.status).toBe(200);
+      expect(riduzione.body.data).toHaveProperty('copieEffettuate', 1);
+    });
+  });
+
+  describe('registrazioni simultanee (#22)', () => {
+    it('registrazioni in parallelo sullo stesso docente non superano il limite', async () => {
+      const { token: adminToken } = await loginAsAdmin();
+      const { token: collaboratoreToken } = await loginAsCollaboratore();
+      const docente = await creaDocente(10);
+
+      // 6 richieste da 3 copie con limite 10: ne possono passare solo 3 (totale 9)
+      const risposte = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => registra(i % 2 ? adminToken : collaboratoreToken, docente.id, 3)),
+      );
+
+      const accettate = risposte.filter((r) => r.status === 201).length;
+      const rifiutate = risposte.filter((r) => r.status === 400).length;
+      expect(accettate).toBe(3);
+      expect(rifiutate).toBe(3);
+    });
+  });
+});
