@@ -31,8 +31,8 @@ Lista di attività da completare per il progetto. Usa questo file come roadmap.
 
 
 
-- [ ] **Export Excel tabella**  
-  Implementare funzionalità di esportazione in formato Excel per le tabelle (docenti, utenti, registrazioni). Permettere l'esportazione dei dati filtrati/visualizzati nella tabella corrente.
+- [x] **Export tabelle**  
+  Esportazione in CSV (apribile in Excel) delle tabelle docenti, utenti e registrazioni, con i filtri applicati. L'import dei docenti da Excel usa `exceljs`.
 
 
 
@@ -68,4 +68,4 @@ Lista di attività da completare per il progetto. Usa questo file come roadmap.
 
 ---
 
-*Ultimo aggiornamento: febbraio 2026*
+*Ultimo aggiornamento: novembre 2026*
