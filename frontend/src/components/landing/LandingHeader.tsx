@@ -7,15 +7,17 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MenuIcon } from "@hugeicons/core-free-icons";
 import { Separator } from "../ui/separator";
 
+// Sezioni della landing: costanti, quindi fuori dal componente.
+const NAV_SECTIONS = [
+  { id: "benefits", label: "Perché ScriptaScuola" },
+  { id: "security", label: "Dati e sicurezza" },
+  { id: "how-it-works", label: "Come funziona" },
+  { id: "cta", label: "Inizia ora" },
+];
+
 export default function LandingHeader() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const NAV_SECTIONS = [
-    { id: "benefits", label: "Perché ScriptaScuola" },
-    { id: "security", label: "Dati e sicurezza" },
-    { id: "how-it-works", label: "Come funziona" },
-    { id: "cta", label: "Inizia ora" },
-  ];
   useEffect(() => {
     const sectionsElements = NAV_SECTIONS.map((section)=> {
       const el = document.getElementById(section.id);

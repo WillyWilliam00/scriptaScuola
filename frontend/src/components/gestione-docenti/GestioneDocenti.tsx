@@ -88,7 +88,7 @@ export default function GestioneDocenti() {
 
   const handleExport = useCallback(() => {
     exportDocenti(docentiQuery);
-  }, [docentiQuery]);
+  }, [exportDocenti, docentiQuery]);
 
   const filterValues = useMemo(
     () => ({ nome: docentiQuery.nome, cognome: docentiQuery.cognome }),

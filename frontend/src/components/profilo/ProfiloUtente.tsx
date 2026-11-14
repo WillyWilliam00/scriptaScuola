@@ -86,7 +86,7 @@ export default function ProfiloUtente() {
       logout(queryClient)
       navigate('/login')
     }
-  }, [timeToLogout]);
+  }, [timeToLogout, navigate, queryClient]);
 
   const displayIdentifier = isAdmin ? utente?.email : utente?.username;
 
