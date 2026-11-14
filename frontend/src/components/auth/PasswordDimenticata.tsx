@@ -14,14 +14,20 @@ import { formatError } from "@/lib/utils";
 
 const NOTA_MAX = 200;
 
+/** Controllo leggero lato client: la validazione vera la fa il server. */
+function isEmail(valore: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valore);
+}
+
 /**
- * Pagina "Password dimenticata?" per i collaboratori.
- * La richiesta arriva agli admin dell'istituto, che generano una password temporanea
- * e la consegnano di persona. Il server risponde sempre allo stesso modo,
- * anche se lo username non esiste.
+ * Pagina "Password dimenticata?".
+ * - Email (amministratori): arriva un link per scegliere una nuova password.
+ * - Username (collaboratori): la richiesta arriva agli admin dell'istituto, che generano
+ *   una password temporanea e la consegnano di persona.
+ * Il server risponde sempre allo stesso modo, anche se l'utente non esiste.
  */
 export default function PasswordDimenticata() {
-  const [inviata, setInviata] = useState<string | null>(null);
+  const [inviata, setInviata] = useState<{ messaggio: string; perEmail: boolean } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm({
@@ -29,12 +35,24 @@ export default function PasswordDimenticata() {
     validators: { onChange: richiestaResetFormSchema },
     onSubmit: async ({ value }) => {
       setServerError(null);
+      const identificativo = value.username.trim();
       try {
+        // Con una @ è l'email di un amministratore: riceve il link per email.
+        // Senza @ è lo username di un collaboratore: la richiesta va agli admin dell'istituto.
+        if (isEmail(identificativo)) {
+          const res = await api.post<{ message: string }>("/auth/password-dimenticata", { email: identificativo });
+          setInviata({ messaggio: res.data.message, perEmail: true });
+          return;
+        }
+        if (identificativo.includes("@")) {
+          setServerError("L'indirizzo email non sembra valido.");
+          return;
+        }
         const res = await api.post<{ message: string }>("/auth/richiesta-reset", {
-          username: value.username,
+          username: identificativo,
           nota: value.nota || undefined,
         });
-        setInviata(res.data.message);
+        setInviata({ messaggio: res.data.message, perEmail: false });
       } catch (err) {
         setServerError(formatError(err, "Non è stato possibile inviare la richiesta. Riprova più tardi."));
       }
@@ -52,10 +70,12 @@ export default function PasswordDimenticata() {
         {inviata ? (
           <div className="mt-6 space-y-4" data-testid="richiesta-inviata">
             <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded">
-              {inviata}
+              {inviata.messaggio}
             </div>
             <p className="text-sm text-muted-foreground text-center">
-              Quando la ricevi, accedi con quella password: ti chiederemo subito di sceglierne una nuova.
+              {inviata.perEmail
+                ? "Il link vale 60 minuti e si può usare una sola volta."
+                : "Quando la ricevi, accedi con quella password: ti chiederemo subito di sceglierne una nuova."}
             </p>
             <Button asChild className="w-full rounded-none">
               <Link to="/login">Torna al login</Link>
@@ -64,7 +84,8 @@ export default function PasswordDimenticata() {
         ) : (
           <>
             <p className="text-sm text-center text-muted-foreground mt-1">
-              Scrivi il tuo username: avviseremo gli amministratori del tuo istituto, che ti daranno una password temporanea.
+              Amministratori: scrivete la vostra email e riceverete un link per scegliere una nuova password.
+              Collaboratori: scrivete il vostro username e avviseremo gli amministratori dell'istituto.
             </p>
             <form
               onSubmit={(e) => {
@@ -77,12 +98,12 @@ export default function PasswordDimenticata() {
                 <form.Field name="username">
                   {(field) => (
                     <Field>
-                      <FieldLabel htmlFor="username">Username</FieldLabel>
+                      <FieldLabel htmlFor="username">Username o email</FieldLabel>
                       <FieldContent>
                         <Input
                           id="username"
                           autoComplete="username"
-                          placeholder="Il tuo username"
+                          placeholder="Username oppure email da amministratore"
                           className="rounded-none h-12"
                           value={field.state.value}
                           onChange={(e) => field.handleChange(e.target.value)}
@@ -96,6 +117,8 @@ export default function PasswordDimenticata() {
                   )}
                 </form.Field>
 
+                <form.Subscribe selector={(state) => state.values.username.includes("@")}>
+                  {(perEmail) => perEmail ? null : (
                 <form.Field name="nota">
                   {(field) => (
                     <Field>
@@ -120,22 +143,21 @@ export default function PasswordDimenticata() {
                     </Field>
                   )}
                 </form.Field>
+                  )}
+                </form.Subscribe>
 
                 {serverError && (
                   <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{serverError}</div>
                 )}
 
                 <div className="pt-2 flex flex-col items-center">
-                  <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
-                    {([canSubmit, isSubmitting]) => (
+                  <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting, state.values.username.includes("@")] as const}>
+                    {([canSubmit, isSubmitting, perEmail]) => (
                       <Button type="submit" className="w-full rounded-none" disabled={!canSubmit || isSubmitting}>
-                        {isSubmitting ? "Invio in corso..." : "Avvisa gli amministratori"}
+                        {isSubmitting ? "Invio in corso..." : perEmail ? "Inviami il link" : "Avvisa gli amministratori"}
                       </Button>
                     )}
                   </form.Subscribe>
-                  <p className="text-xs text-muted-foreground text-center mt-3">
-                    Sei un amministratore? Per ora chiedi a un altro amministratore dell'istituto di generarti una password temporanea.
-                  </p>
                   <Link to="/login" className="text-sm text-muted-foreground underline hover:text-primary mt-3">
                     Torna al login
                   </Link>

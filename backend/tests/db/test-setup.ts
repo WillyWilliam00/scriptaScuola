@@ -30,6 +30,7 @@ export async function cleanTestDb() {
     TRUNCATE TABLE 
       refresh_tokens,
       richieste_reset_password,
+      token_email,
       registrazioni_copie,
       docenti,
       utenti,

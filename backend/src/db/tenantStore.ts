@@ -437,6 +437,12 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                         throw error;
                     }
                     updateValues.email = validateData.email;
+                    // Email cambiata: la nuova non è ancora verificata
+                    const [attuale] = await db.select({ email: utenti.email }).from(utenti)
+                        .where(and(eq(utenti.id, id), eq(utenti.istitutoId, istitutoId)));
+                    if (attuale && attuale.email !== validateData.email) {
+                        updateValues.emailVerificataAt = null;
+                    }
                 
                 } else {
                     if(!validateData.username) {
@@ -445,6 +451,7 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                         throw error;
                     }
                     updateValues.email = null;
+                    updateValues.emailVerificataAt = null;
                     const [utenteEsistente] = await db.select().from(utenti).where(and(eq(utenti.username, validateData.username), ne(utenti.id, id)));
                     if(utenteEsistente) {
                         const error = new Error('Username già in uso') as ErrorWithStatus;

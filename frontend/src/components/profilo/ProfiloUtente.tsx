@@ -19,6 +19,7 @@ import { logout } from '@/lib/auth-api';
 import { useNavigate } from 'react-router-dom';
 import { useDeleteUtente } from '@/hooks/use-utenti';
 import CambiaPasswordCard from '@/components/profilo/CambiaPasswordCard';
+import StatoEmailAdmin from '@/components/profilo/StatoEmailAdmin';
 
 type DeleteDialogType = 'account' | 'istituto' | null;
 
@@ -124,7 +125,7 @@ export default function ProfiloUtente() {
             <h3 className="text-sm font-medium text-muted-foreground">
               {isAdmin ? 'Email' : 'Username'}
             </h3>
-            <p className="text-base">{displayIdentifier}</p>
+            {isAdmin ? <StatoEmailAdmin /> : <p className="text-base">{displayIdentifier}</p>}
           </div>
 
           <Separator />

@@ -104,7 +104,32 @@ export const richiestaResetSchema = z.object({
 export type RichiestaReset = z.infer<typeof richiestaResetSchema>;
 /** Variante per il form: la nota è sempre una stringa (vuota = nessuna nota). */
 export const richiestaResetFormSchema = richiestaResetSchema.extend({
+  username: z.string().trim().min(1, 'Inserisci username o email').max(255),
   nota: z.string().max(200, 'La nota può contenere al massimo 200 caratteri'),
+});
+
+/** Password dimenticata di un admin: si chiede il link via email. */
+export const passwordDimenticataSchema = z.object({
+  email: z.email('Formato email non valido'),
+});
+
+/** Nuova password scelta dal link ricevuto via email. */
+export const reimpostaPasswordSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/, 'Link non valido'),
+  newPassword: z.string().min(8, 'La password deve essere di almeno 8 caratteri'),
+});
+
+export const reimpostaPasswordFormSchema = z.object({
+  newPassword: z.string().min(8, 'La password deve essere di almeno 8 caratteri'),
+  confirmPassword: z.string().min(8, 'La password deve essere di almeno 8 caratteri'),
+}).superRefine((data, ctx) => {
+  if (data.newPassword !== data.confirmPassword) {
+    ctx.addIssue({ code: 'custom', message: 'Le password non coincidono', path: ['confirmPassword'] });
+  }
+});
+
+export const verificaEmailSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/, 'Link non valido'),
 });
 
 export const changePasswordSchema = z.object({

@@ -35,6 +35,8 @@ export const utenti = pgTable('utenti', {
     // l'utente deve cambiarla al primo accesso, e scade dopo 48 ore.
     deveCambiarePassword: boolean('deve_cambiare_password').notNull().default(false),
     passwordTemporaneaScadeAt: timestamp('password_temporanea_scade_at'),
+    // Quando l'utente ha confermato l'email cliccando il link ricevuto (null = non verificata).
+    emailVerificataAt: timestamp('email_verificata_at'),
 }, (table) => [
     check('utenti_at_least_one_identifier', sql`${table.username} IS NOT NULL OR ${table.email} IS NOT NULL`),
     index('idx_utenti_istituto_id').on(table.istitutoId),
@@ -89,4 +91,22 @@ export const richiesteResetPassword = pgTable('richieste_reset_password', {
 }, (table) => [
     index('idx_richieste_reset_istituto_id').on(table.istitutoId),
     index('idx_richieste_reset_utente_id').on(table.utenteId),
+]);
+
+
+// Token monouso inviati via email: verifica dell'indirizzo e recupero password degli admin.
+// Nel database c'è solo l'hash SHA-256 del token, come per i refresh token.
+export const tipoTokenEmailEnum = pgEnum('tipo_token_email', ['verifica_email', 'reset_password']);
+export const tokenEmail = pgTable('token_email', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    utenteId: uuid('utente_id').notNull().references(() => utenti.id, { onDelete: 'cascade' }),
+    tipo: tipoTokenEmailEnum('tipo').notNull(),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+    // Indirizzo a cui è stato inviato: se nel frattempo l'email cambia, il token non vale più
+    email: varchar('email', { length: 255 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    usatoAt: timestamp('usato_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+    index('idx_token_email_utente_id').on(table.utenteId),
 ]);
