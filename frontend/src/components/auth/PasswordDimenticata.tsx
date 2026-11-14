@@ -42,7 +42,7 @@ export default function PasswordDimenticata() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-primary px-4 pt-10 pb-16">
       <div className="bg-secondary rounded-lg p-6 w-full max-w-xl">
         <div className="flex items-center justify-center w-20 h-20 rounded-full bg-primary p-2 mx-auto">
           <HugeiconsIcon icon={KeyIcon} strokeWidth={2} className="text-secondary w-12 h-12" />
