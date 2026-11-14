@@ -27,7 +27,11 @@ export interface ErrorWithStatus extends Error {
     status?: number;
 }
 
-export const JWT_SECRET = process.env.JWT_SECRET!
+// Fallisce all'avvio invece che al primo login se la variabile manca
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET mancante: impostala nelle variabili d\'ambiente del backend');
+}
+export const JWT_SECRET: string = process.env.JWT_SECRET;
 
 /**
  * Middleware di autenticazione che verifica:

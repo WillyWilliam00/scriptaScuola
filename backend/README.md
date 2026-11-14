@@ -210,10 +210,11 @@ Ogni tabella è filtrata per `istitutoId` per garantire l’isolamento dei dati 
 Creare un file `.env` in `backend` (o configurare le variabili nel tuo ambiente) con almeno:
 
 - `DATABASE_URL`: connection string PostgreSQL (Neon o altro).
-- `JWT_SECRET`: chiave segreta per firmare i JWT.
+- `JWT_SECRET`: chiave segreta per firmare i JWT. Obbligatoria: senza, il backend non parte.
 - `PORT`: porta HTTP su cui esporre il backend (default 3000).
 - `TRUST_PROXY`: numero di proxy davanti al backend (default 2: Vercel, che inoltra `/api`, più il proxy di Render). Serve al limite dei tentativi su login e registrazione per leggere l'IP reale del client. Dopo un deploy si verifica con `GET /api/health/ip`, che deve mostrare il proprio IP pubblico.
 - `FRONTEND_ORIGIN`: origine del sito in produzione (es. `https://scriptascuola.it`). Le richieste da altre origini ricevono 403.
+- `ALLOWED_ORIGINS`: altre origini ammesse, separate da virgola (es. `http://192.168.1.10:3000` per provare il sito da un telefono in rete locale). Facoltativa. Fuori da `NODE_ENV=production` è sempre ammesso anche `http://localhost:3000`.
 - `COOKIE_SECURE`: `false` per disattivare l'attributo Secure del cookie di sessione in locale (serve solo con Safari su http). Di default il cookie è Secure fuori dai test.
 - Eventuali altre variabili richieste dal tuo setup DB.
 

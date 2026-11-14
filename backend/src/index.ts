@@ -17,14 +17,18 @@ const app = express();
 app.set('trust proxy', getTrustProxy());
 // Porta del backend: default 3001 per evitare conflitto con frontend Vite su 3000
 const PORT = process.env.PORT || 3001;
-const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+// Origini ammesse dal CORS: FRONTEND_ORIGIN (produzione) più ALLOWED_ORIGINS (lista separata da virgole,
+// es. per provare da un altro dispositivo in rete locale). In sviluppo resta ammesso http://localhost:3000.
+export function getAllowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+    const origini = [
+        env.FRONTEND_ORIGIN || 'http://localhost:3000',
+        ...(env.ALLOWED_ORIGINS ?? '').split(','),
+    ];
+    if (env.NODE_ENV !== 'production') origini.push('http://localhost:3000');
+    return [...new Set(origini.map((o) => o.trim()).filter(Boolean))];
+}
 
-const allowedOrigins = [
-    origin,
-    'http://localhost:3000',
-    'http://192.168.1.50:3000',
-
-];
+const allowedOrigins = getAllowedOrigins();
 
 app.use(
     helmet({
