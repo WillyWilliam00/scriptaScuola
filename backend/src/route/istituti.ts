@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { asyncHandler } from '../middleware/auth.js';
 import type { Request, Response } from 'express';
 import { db } from '../db/index.js';
@@ -25,7 +25,7 @@ router.delete('/delete-istituto', asyncHandler(async (req: Request, res: Respons
     const { nomeIstituto, password } = confermaEliminazioneSchema.parse(req.body ?? {});
 
     const [utente] = await db.select({ passwordHash: utenti.passwordHash }).from(utenti)
-        .where(eq(utenti.id, req.user.userId));
+        .where(and(eq(utenti.id, req.user.userId), eq(utenti.istitutoId, req.user.istitutoId)));
     const [istituto] = await db.select({ nome: istituti.nome }).from(istituti)
         .where(eq(istituti.id, req.user.istitutoId));
     if (!utente || !istituto) {
