@@ -22,7 +22,7 @@ export function getUtenteFormValues(utente: Utente): UtenteFormValues {
 }
 
 /** Invia solo i campi del ruolo attivo: email per admin, username per collaboratore. */
-function toUtentePayload(value: UtenteFormValues): CreateUtente {
+export function toUtentePayload(value: UtenteFormValues): CreateUtente {
     if (value.ruolo === "admin") {
         return { ruolo: "admin", email: value.email };
     }

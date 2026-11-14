@@ -133,6 +133,21 @@ npm run build
 
 Puoi poi usare `npm run preview` per un’anteprima locale della build.
 
+### Test
+
+```bash
+cd frontend
+npm test               # tutti i test, una volta
+npm run test:watch     # riesegue i test a ogni modifica
+npm run test:coverage  # report di copertura in coverage/ (per ora senza soglie)
+```
+
+- **Vitest** con **jsdom** (browser simulato) e **Testing Library**; la configurazione è in `vitest.config.ts` e riusa gli alias di Vite.
+- La rete è simulata con **MSW**: ogni test registra le risposte che gli servono con `server.use(...)`; una chiamata senza risposta prevista fa fallire il test. Non serve il backend.
+- I test stanno accanto al file che provano (`api.ts` → `api.test.ts`); gli aiuti comuni sono in `src/test/` (`createWrapper`, `loginAs`, `makeJwt`, `stubDownload`).
+- Regola: si prova il comportamento visibile (richieste inviate, stato della sessione, messaggi mostrati), non le funzioni interne.
+- I test girano anche in CI, nel job del frontend.
+
 ### Note di design
 
 - L’interfaccia è pensata per essere **semplice e veloce da usare in segreteria scolastica**:
