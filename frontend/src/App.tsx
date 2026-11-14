@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef } from "react";
+import { lazy, Suspense, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -22,19 +22,19 @@ export function App() {
   const isInitializing = useAuthStore((state) => state.isInitializing);
 
   // QueryClient creato una sola volta per l'intera vita del componente
-  const queryClientRef = useRef<QueryClient | null>(null);
-  if (!queryClientRef.current) {
-    queryClientRef.current = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: 1,
-          refetchOnWindowFocus: false,
-          staleTime: 2 * 60 * 1000,
-          gcTime: 5 * 60 * 1000,
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: 1,
+            refetchOnWindowFocus: false,
+            staleTime: 2 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
+          },
         },
-      },
-    });
-  }
+      }),
+  );
 
   if (isInitializing) {
     return (
@@ -52,7 +52,7 @@ export function App() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClientRef.current}>
+      <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Suspense fallback={<PageFallback />}>
             <Routes>
