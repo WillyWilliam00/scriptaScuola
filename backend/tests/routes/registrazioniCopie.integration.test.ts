@@ -242,5 +242,26 @@ describe('Rotte /api/registrazioni-copie', () => {
       expect(accettate).toBe(3);
       expect(rifiutate).toBe(3);
     });
+
+    it('modifiche in parallelo sullo stesso docente non superano il limite', async () => {
+      const { token } = await loginAsAdmin();
+      const docente = await creaDocente(10);
+
+      // 6 registrazioni da 1 copia: totale 6
+      const create = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await registra(token, docente.id, 1);
+        expect(r.status).toBe(201);
+        create.push(r.body.id as number);
+      }
+
+      // Ogni modifica porta una registrazione da 1 a 3 copie (+2): 6 -> 8 -> 10, poi il limite blocca
+      const risposte = await Promise.all(create.map((id) => modifica(token, id, 3)));
+
+      const accettate = risposte.filter((r) => r.status === 200).length;
+      const rifiutate = risposte.filter((r) => r.status === 400).length;
+      expect(accettate).toBe(2);
+      expect(rifiutate).toBe(4);
+    });
   });
 });
