@@ -1,5 +1,5 @@
 ---
-name: porta-pr-a-verde
+name: babysit
 description: Come portare una PR di ScriptaScuola fino al merge, con CI verde e review automatica risolta. Da usare dopo aver aperto una PR verso develop o quando la CI o la review segnalano problemi.
 ---
 
