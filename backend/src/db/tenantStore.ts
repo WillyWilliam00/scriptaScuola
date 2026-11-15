@@ -237,7 +237,7 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                 const validateData = bulkImportDocentiSchema.parse(data);
                 const { docenti: docentiDaImportare } = validateData;
 
-                return await db.transaction(async (tx: any) => {
+                return await db.transaction(async (tx: Transaction) => {
                     // 1. Recupera tutti i nomi/cognomi per un controllo massivo (evita N SELECT nel loop)
                     const docentiEsistenti = await tx
                         .select({ nome: docenti.nome, cognome: docenti.cognome })
@@ -689,8 +689,10 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                 return registrazioni;
             },
             create: async(data: InsertRegistrazione) => {
+                // Lo store valida di nuovo anche se la route ha già validato: così resta sicuro
+                // anche se un domani lo chiama altro codice (script, seed, altre rotte).
                 const validateData = insertRegistrazioneSchema.parse(data);
-                const result = await db.transaction(async (tx: any) => {
+                const result = await db.transaction(async (tx: Transaction) => {
                     const [utente] = await tx.select().from(utenti).where(and(eq(utenti.id, validateData.utenteId), eq(utenti.istitutoId, istitutoId)));
                     if(!utente) {
                         const error = new Error('Utente non trovato') as ErrorWithStatus;
@@ -714,7 +716,7 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
             },
             update: async(id: number, data: ModifyRegistrazione) => {
                 const validateData = modifyRegistrazioneSchema.parse(data);
-                const result = await db.transaction(async (tx: any) => {
+                const result = await db.transaction(async (tx: Transaction) => {
                     // Verifica che la registrazione esista e appartenga all'istituto
                     const [registrazioneEsistente] = await tx.select()
                         .from(registrazioniCopie)
