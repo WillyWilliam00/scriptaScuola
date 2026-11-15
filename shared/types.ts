@@ -16,6 +16,14 @@ export interface PaginationResponse<T> {
 }
 
 export type SortOrder = 'asc' | 'desc';
+
+/**
+ * Come arriva un oggetto al frontend dopo il passaggio in JSON:
+ * le date diventano stringhe ISO (es. "2026-11-15T10:00:00.000Z").
+ */
+export type Json<T> = {
+  [K in keyof T]: T[K] extends Date ? string : T[K] extends Date | null ? string | null : T[K];
+};
 export interface DocentiFilters {
   nome?: string;
   cognome?: string;

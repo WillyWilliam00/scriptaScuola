@@ -8,7 +8,6 @@ import {
   createUtenteSchema,
   idParamSchema,
   uuidParamSchema,
-  refreshTokenSchema,
   insertDocenteSchema,
   modifyUtenteSchema,
   richiestaResetSchema,

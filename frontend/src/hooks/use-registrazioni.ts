@@ -1,7 +1,7 @@
 import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
-import type { Registrazione, RegistrazioniCopiePaginatedResponse } from '../../../shared/types.js';
-import type { RegistrazioniCopieQuery, InsertRegistrazione, ModifyRegistrazione } from '../../../shared/validation.js';
+import type { Json, Registrazione, RegistrazioniCopiePaginatedResponse } from '../../../shared/types.js';
+import type { RegistrazioniCopieQuery, NuovaRegistrazioneBody, ModifyRegistrazione } from '../../../shared/validation.js';
 import { toast } from 'sonner';
 import { formatError } from '@/lib/utils.js';
 
@@ -53,8 +53,8 @@ export function useCreateRegistrazione() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: InsertRegistrazione) => {
-      const response = await api.post<InsertRegistrazione>(
+    mutationFn: async (data: NuovaRegistrazioneBody) => {
+      const response = await api.post<Json<Registrazione>>(
         '/registrazioni-copie/new-registrazione',
         data
       );
@@ -84,7 +84,7 @@ export function useUpdateRegistrazione() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: ModifyRegistrazione }) => {
-      const response = await api.put<{ message: string; data: Registrazione }>(
+      const response = await api.put<{ message: string; data: Json<Registrazione> }>(
         `/registrazioni-copie/update-registrazione/${id}`,
         data
       );

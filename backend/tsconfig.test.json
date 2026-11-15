@@ -1,0 +1,8 @@
+{
+  // Solo per il typecheck: include anche i test, che non finiscono nella build
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*", "tests/**/*", "drizzle.config.ts"]
+}

@@ -1,6 +1,9 @@
 {
   "name": "scripta-scuola",
   "private": true,
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
   "workspaces": [
     "shared",
     "frontend",

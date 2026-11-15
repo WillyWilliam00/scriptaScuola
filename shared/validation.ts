@@ -156,6 +156,9 @@ export const insertRegistrazioneSchema = z.object({
   note: z.string().optional(),
 });
 
+// Body inviato dal frontend: l'autore (utenteId) lo aggiunge il server dal token
+export const nuovaRegistrazioneSchema = insertRegistrazioneSchema.omit({ utenteId: true });
+
 export const modifyRegistrazioneSchema = z.object({
   copieEffettuate: z.number().positive('Le copie devono essere almeno 1'),
   note: z.string().optional(),
@@ -332,6 +335,7 @@ export type ChangePasswordForm = z.infer<typeof changePasswordFormSchema>;
 export type ModifyDocente = z.infer<typeof modifyDocenteSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type InsertRegistrazione = z.infer<typeof insertRegistrazioneSchema>;
+export type NuovaRegistrazioneBody = z.infer<typeof nuovaRegistrazioneSchema>;
 export type ModifyRegistrazione = z.infer<typeof modifyRegistrazioneSchema>;
 export type DocentiQuery = z.infer<typeof docentiQuerySchema>;
 export type RegistrazioniCopieQuery = z.infer<typeof registrazioniCopieQuerySchema>;

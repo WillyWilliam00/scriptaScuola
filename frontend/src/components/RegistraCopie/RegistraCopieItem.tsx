@@ -14,7 +14,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useCreateRegistrazione } from "@/hooks/use-registrazioni.js";
-import { useAuthStore } from "@/store/auth-store.js";
 import { createRegistrazioneFormSchema } from "../../../../shared/validation.js";
 import type { DocenteConRegistrazioni } from "../../../../shared/types.js";
 import { cn, formatError } from "@/lib/utils.js";
@@ -33,7 +32,6 @@ export default function RegistraCopieItem({
   onOpenChange,
 }: RegistraCopieItemProps) {
   const createRegistrazione = useCreateRegistrazione();
-  const utenteId = useAuthStore((s) => s.utente?.id);
   const [serverError, setServerError] = useState<string | null>(null);
   const isOverRegistrazioni = docente.copieRimanenti === 0;
   const missing5Percent = Math.max(1, (docente.limiteCopie * 0.05)) >= docente.copieRimanenti;
@@ -55,21 +53,14 @@ export default function RegistraCopieItem({
     onSubmit: async ({ value }) => {
       setServerError(null); // Reset errore server prima di ogni submit
 
-      // Validazione utenteId (non può essere validata con Zod perché viene dallo store)
-      if (!utenteId) {
-        setServerError("Sessione non valida. Effettua di nuovo l'accesso.");
-        return;
-      }
-
       // Convertiamo la stringa in numero per la mutation
       const copieNumero = Number(value.copie);
 
-      // Costruiamo l'oggetto completo per la mutation
+      // L'autore della registrazione lo aggiunge il server dal token
       createRegistrazione.mutate(
         {
           docenteId: docente.id,
           copieEffettuate: copieNumero,
-          utenteId,
           note: value.note.trim() || undefined,
         },
         {
@@ -141,7 +132,7 @@ export default function RegistraCopieItem({
           <div className="flex gap-2 flex-wrap">
             <form.Field name="copie">
               {(field) => (
-                <div className="flex-1 min-w-[220px]">
+                <div className="flex-1 min-w-55">
                   <InputGroup>
                     <InputGroupInput
                       type="number"
@@ -167,7 +158,7 @@ export default function RegistraCopieItem({
 
             <form.Field name="note">
               {(field) => (
-                <div className="flex-1 min-w-[220px]">
+                <div className="flex-1 min-w-55">
                   <InputGroup>
                     <InputGroupInput
                       type="text"

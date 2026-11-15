@@ -1,7 +1,7 @@
 import express from 'express';
 import { asyncHandler, requireRole } from '../middleware/auth.js';
 import type { Request, Response } from 'express';
-import { idParamSchema, insertRegistrazioneSchema, modifyRegistrazioneSchema, registrazioniCopieQuerySchema, type InsertRegistrazione, type ModifyRegistrazione } from '../../../shared/validation.js';
+import { idParamSchema, nuovaRegistrazioneSchema, modifyRegistrazioneSchema, registrazioniCopieQuerySchema, type ModifyRegistrazione } from '../../../shared/validation.js';
 import type { RegistrazioniCopiePaginatedResponse } from '../../../shared/types.js';
 import { toCsvValue } from '../db/utils/pagination.js';
 const router = express.Router();
@@ -72,8 +72,12 @@ router.post('/new-registrazione', asyncHandler(async (req: Request, res: Respons
     if(!req.tenantStore) {
         return res.status(500).json({ error: 'Store non inizializzato' });
     }
-    const data = insertRegistrazioneSchema.parse(req.body);
-    const result: InsertRegistrazione = await req.tenantStore.registrazioniCopie.create(data);
+    if(!req.user) {
+        return res.status(401).json({ error: 'Utente non autenticato' });
+    }
+    // L'autore della registrazione è sempre l'utente del token: un eventuale utenteId nel body viene ignorato
+    const data = nuovaRegistrazioneSchema.parse(req.body);
+    const result = await req.tenantStore.registrazioniCopie.create({ ...data, utenteId: req.user.userId });
     res.status(201).json(result);
 }))
 

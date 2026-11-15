@@ -61,6 +61,9 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
+      - name: Controllo dei tipi
+        run: npm run typecheck -w shared
+
       - name: Test
         run: npm test -w shared
 
@@ -98,7 +101,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
 
       - name: Controllo dei tipi
-        run: npx tsc --noEmit
+        run: npm run typecheck
         working-directory: backend
 
       # Nel repo non ci sono migrazioni: lo schema si crea direttamente da src/db/schema.ts.
