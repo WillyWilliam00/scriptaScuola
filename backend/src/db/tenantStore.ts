@@ -752,6 +752,13 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
                         ))
                         .returning();
 
+                    // Una delete concorrente può aver eliminato la riga dopo la lettura iniziale
+                    if (!registrazioneAggiornata) {
+                        const error = new Error('Registrazione non trovata') as ErrorWithStatus;
+                        error.status = 404;
+                        throw error;
+                    }
+
                     return registrazioneAggiornata;
                 });
                 return result;

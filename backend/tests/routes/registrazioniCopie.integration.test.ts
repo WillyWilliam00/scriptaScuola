@@ -5,7 +5,7 @@ import { cleanTestDb } from '../db/test-setup.js';
 import { seedTestData } from '../db/test-seed.js';
 import { loginAsAdmin, loginAsCollaboratore } from '../utils/test-helpers.js';
 import { testDb } from '../db/test-setup.js';
-import { docenti, istituti } from '../../src/db/schema.js';
+import { docenti, istituti, registrazioniCopie } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /** Crea un docente nell'istituto di test con il limite indicato, per test indipendenti dai dati del seed. */
@@ -262,6 +262,26 @@ describe('Rotte /api/registrazioni-copie', () => {
       const rifiutate = risposte.filter((r) => r.status === 400).length;
       expect(accettate).toBe(2);
       expect(rifiutate).toBe(4);
+    });
+
+    it('una modifica su una registrazione eliminata nel frattempo risponde 404', async () => {
+      const { token } = await loginAsAdmin();
+      const docente = await creaDocente(10);
+      const r = await registra(token, docente.id, 1);
+      expect(r.status).toBe(201);
+
+      let risposta: request.Response | undefined;
+      // Blocchiamo il docente: la modifica legge la registrazione e poi resta in attesa del blocco
+      await testDb.transaction(async (tx) => {
+        await tx.select().from(docenti).where(eq(docenti.id, docente.id)).for('update');
+        void modifica(token, r.body.id, 2).then((res) => { risposta = res; });
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // Intanto la registrazione viene eliminata
+        await tx.delete(registrazioniCopie).where(eq(registrazioniCopie.id, r.body.id));
+      });
+      // Il commit ha sbloccato la modifica: il suo UPDATE non trova più la riga
+      await expect.poll(() => risposta?.status, { timeout: 5000 }).toBe(404);
+      expect(risposta!.body.error).toBe('Registrazione non trovata');
     });
   });
 });
