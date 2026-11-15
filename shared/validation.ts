@@ -332,6 +332,8 @@ export type ChangePasswordForm = z.infer<typeof changePasswordFormSchema>;
 export type ModifyDocente = z.infer<typeof modifyDocenteSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type InsertRegistrazione = z.infer<typeof insertRegistrazioneSchema>;
+// Body inviato dal frontend: l'autore (utenteId) lo aggiunge il server dal token
+export type NuovaRegistrazioneBody = Omit<InsertRegistrazione, 'utenteId'>;
 export type ModifyRegistrazione = z.infer<typeof modifyRegistrazioneSchema>;
 export type DocentiQuery = z.infer<typeof docentiQuerySchema>;
 export type RegistrazioniCopieQuery = z.infer<typeof registrazioniCopieQuerySchema>;

@@ -688,7 +688,7 @@ export const createTenantStore = (istitutoId: number, db: DbInstance | Transacti
 
                 return registrazioni;
             },
-            create: async(data: Omit<InsertRegistrazione, 'istitutoId'>) => {
+            create: async(data: InsertRegistrazione) => {
                 const validateData = insertRegistrazioneSchema.parse(data);
                 const result = await db.transaction(async (tx: any) => {
                     const [utente] = await tx.select().from(utenti).where(and(eq(utenti.id, validateData.utenteId), eq(utenti.istitutoId, istitutoId)));

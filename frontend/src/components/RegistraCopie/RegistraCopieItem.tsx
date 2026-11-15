@@ -69,7 +69,6 @@ export default function RegistraCopieItem({
         {
           docenteId: docente.id,
           copieEffettuate: copieNumero,
-          utenteId,
           note: value.note.trim() || undefined,
         },
         {
@@ -141,7 +140,7 @@ export default function RegistraCopieItem({
           <div className="flex gap-2 flex-wrap">
             <form.Field name="copie">
               {(field) => (
-                <div className="flex-1 min-w-[220px]">
+                <div className="flex-1 min-w-55">
                   <InputGroup>
                     <InputGroupInput
                       type="number"
@@ -167,7 +166,7 @@ export default function RegistraCopieItem({
 
             <form.Field name="note">
               {(field) => (
-                <div className="flex-1 min-w-[220px]">
+                <div className="flex-1 min-w-55">
                   <InputGroup>
                     <InputGroupInput
                       type="text"

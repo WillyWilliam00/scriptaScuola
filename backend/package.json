@@ -9,7 +9,8 @@
     "dev": "nodemon --exec tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/backend/src/index.js",
-    "seed": "tsx scripts/seed-istituto-prova.ts"
+    "seed": "tsx scripts/seed-istituto-prova.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
